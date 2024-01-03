@@ -2,84 +2,14 @@ use gloo_net::http::Request;
 use wasm_bindgen_futures;
 use serde::Deserialize;
 use gloo_console::log;
+use crate::components::player_select::*;
+use crate::components::winner_select::*;
+use crate::components::commander_input::*;
 use yew::prelude::*;
-
-#[derive(Clone, PartialEq, Deserialize)]
-struct Player {
-    name: String
-}
-
-#[derive(Properties, PartialEq)]
-struct PlayersSelectProps {
-    players: Vec<String>,
-    on_click: Callback<String>
-}
-
-#[derive(Properties, PartialEq)]
-struct WinnerSelectProps {
-    chosen_players: Vec<String>,
-}
 
 #[derive(Deserialize)]
 struct PlayersResponse{
     names: Vec<String>,
-}
-
-#[function_component(PlayersSelect)]
-fn players_select(PlayersSelectProps { players, on_click }: &PlayersSelectProps) -> Html {
-    let on_click = on_click.clone();
-    let default_on_player_select = {
-        let on_click = on_click.clone();
-        Callback::from(move |_| {
-            on_click.emit("".to_string())
-        })
-    };
-
-    html!{
-        <select class="player-select">
-
-        <option onclick={default_on_player_select} value=""></option>
-        {
-            players.iter().map(|player| {
-                let on_player_select = {
-                    let on_click = on_click.clone();
-                    let player = player.clone();
-                    Callback::from(move |_| {
-                        on_click.emit(player.clone())
-                    })
-                };
-
-                html!{
-                    <option onclick={on_player_select} value={player.clone()}>{player.clone()}</option>
-                }
-            }
-            ).collect::<Html>()
-        }
-
-        </select>
-    }
-}
-
-#[function_component(WinnerSelect)]
-fn winner_select(WinnerSelectProps { chosen_players }: &WinnerSelectProps) -> Html {
-    html!{
-        <select id="winner-select" class="winner-select">
-
-        <option value="Draw" selected=true>{"Draw"}</option>
-        {
-            chosen_players.iter().map(|player|
-                if player != "" {
-                    html!{
-                    <option value={player.clone()}>{player.clone()}</option>
-                    }
-                } else {
-                    html!{}
-                }
-            ).collect::<Html>()
-        }
-
-        </select>
-    }
 }
 
 #[function_component(App)]
@@ -109,7 +39,6 @@ pub fn app() -> Html {
     let on_player_select = |index: usize| {
         let selected_players = selected_players.clone();
         Callback::from(move |player: String| {
-            log!("Log");
             let mut new_selected_players: Vec<String> = Vec::new();
             for (i, selected_player) in selected_players.iter().enumerate() {
                 if i == index {
@@ -124,6 +53,41 @@ pub fn app() -> Html {
     };
 
 
+    let commander_inputs = use_state(|| vec!["".to_string(), "".to_string(), "".to_string(), "".to_string()]);
+
+    let on_commander_input = |index: usize| {
+        let commander_inputs = commander_inputs.clone();
+        Callback::from(move |commander: String| {
+            let mut new_commander_inputs: Vec<String> = Vec::new();
+            for (i, commander_input) in commander_inputs.iter().enumerate() {
+                if i == index {
+                    new_commander_inputs.push(commander.clone());
+                }
+                else {
+                    new_commander_inputs.push((*commander_input).clone());
+                }
+            }
+            commander_inputs.set(new_commander_inputs);
+        })
+    };
+
+    let winner_selection = use_state(|| None);
+
+    let on_winner_select = {
+        let winner_selection = winner_selection.clone();
+        Callback::from(move |winner: String| {
+            winner_selection.set(Some(winner));
+        })
+    };
+
+
+    //let game_submit = {
+    //    let commander_inputs = commander_inputs.clone();
+    //    let selected_players = selected_players.clone();
+    //    let winner
+    //}
+
+
     html! {
         <main>
             <table>
@@ -136,14 +100,14 @@ pub fn app() -> Html {
                 </tr>
                 <tr>
                     <label>{ "Commanders" }</label>
-                    <td><input id="commander1-input" class="commander-input"/></td>
-                    <td><input id="commander2-input" class="commander-input"/></td>
-                    <td><input id="commander3-input" class="commander-input"/></td>
-                    <td><input id="commander4-input" class="commander-input"/></td>
+                    <td><CommanderInput onchange={on_commander_input.clone()(0)}/></td>
+                    <td><CommanderInput onchange={on_commander_input.clone()(1)}/></td>
+                    <td><CommanderInput onchange={on_commander_input.clone()(2)}/></td>
+                    <td><CommanderInput onchange={on_commander_input.clone()(3)}/></td>
                 </tr>
                 <tr>
                     <label>{ "Winner" }</label>
-                    <td><WinnerSelect chosen_players={(*selected_players).clone()} /></td>
+                    <td><WinnerSelect chosen_players={(*selected_players).clone()} on_click={on_winner_select} /></td>
                 </tr>
             </table>
             <input type="submit" value="Submit"/>
