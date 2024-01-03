@@ -9,16 +9,25 @@ edition = "2021"
 # This is only here to make autocompletes happy.
 # Seems like they don't know that we want wasm32 as the arch when building the client.
 # There's probably a better way to do this, but this is fine for now.
-yew = { version="0.20", features=["csr"] }
+gloo-net = "0.5.0"
+wasm-bindgen = "0.2.89"
+wasm-bindgen-futures = "0.4.39"
+serde = "1.0.193"
+yew = { version="0.21", features=["csr"] }
+tower-http = { version="0.5.0", features=["cors"] }
+gloo-console = "0.3.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-yew = { version="0.20", features=["csr"] }
+gloo-net = "0.5.0"
+wasm-bindgen = "0.2.89"
+wasm-bindgen-futures = "0.4.39"
+serde = "1.0.193"
+yew = { version="0.21", features=["csr"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 axum = "0.7.3"
 tokio = { version = "1.35.1", features = ["full"] }
 sqlx = { version = "0.7", features = [ "runtime-tokio", "tls-native-tls", "sqlite" ] }
-serde = "1.0.193"
 serde_json = "1.0.109"
 
 [[bin]]

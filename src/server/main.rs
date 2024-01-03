@@ -4,6 +4,7 @@ use axum::{
     Router,
     Json,
 };
+use tower_http::cors::CorsLayer;
 use serde::{Serialize, Deserialize};
 use sqlx::SqlitePool;
 use sqlx::sqlite::SqliteConnectOptions;
@@ -55,11 +56,15 @@ async fn main() -> Result<(), sqlx::Error> {
                         let shared_state = Arc::clone(&shared_state);
                         move |body| post_games(body, shared_state)
                     }))
-        .route("/players", get(get_players)
+        .route("/players", get({
+                    let shared_state = Arc::clone(&shared_state);
+                    || get_players(shared_state)
+                })
                .post({
                         let shared_state = Arc::clone(&shared_state);
                         move |body| post_player(body, shared_state)
                     }))
+        .layer(CorsLayer::permissive())
         .with_state(shared_state);
 
     // run our app with hyper, listening globally on port 3000
@@ -98,6 +103,11 @@ struct Game {
     players: Vec<Player>,
 }
 
+#[derive(Serialize, Deserialize)]
+struct PlayersResponse {
+    names: Vec<String>
+}
+
 async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>) -> Json<Value> {
     let row: (i64, ) = sqlx::query_as("INSERT INTO games (date) VALUES($1) RETURNING id").bind(payload.date).fetch_one(&state.pool).await.unwrap();
     let game_id = row.0;
@@ -130,7 +140,7 @@ async fn get_games(state: Arc<AppState>) -> Json<Value> {
         games: vec![]
     };
 
-    let rows: Vec<(i64, String, String, String, i32)> = sqlx::query_as("SELECT games.id, date, players.name, commander, winner from games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&state.pool).await.unwrap();
+    let rows: Vec<(i64, String, String, String, i32)> = sqlx::query_as("SELECT games.id, date, players.name, commander, winner FROM games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&state.pool).await.unwrap();
 
 
     let ids = rows.iter().fold(Vec::new(), |mut acc, row| {
@@ -168,6 +178,19 @@ async fn get_games(state: Arc<AppState>) -> Json<Value> {
     Json(json!(games_response))
 }
 
-async fn get_players() -> &'static str {
-    "Get players"
+async fn get_players(state: Arc<AppState>) -> Json<Value> {
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT name FROM players").fetch_all(&state.pool).await.unwrap();
+
+    // Flatten rows
+    let names = rows.iter().fold(Vec::new(), |mut acc, row| {
+        acc.push(row.0.clone());
+        acc
+    });
+
+    let players_response = PlayersResponse{
+        names
+    };
+
+
+    Json(json!(players_response))
 }
