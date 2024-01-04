@@ -1,6 +1,6 @@
 use gloo_net::http::Request;
 use wasm_bindgen_futures;
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 use gloo_console::log;
 use crate::components::player_select::*;
 use crate::components::winner_select::*;
@@ -10,6 +10,25 @@ use yew::prelude::*;
 #[derive(Deserialize)]
 struct PlayersResponse{
     names: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct PostResponse {
+    success: bool,
+    error: Option<bool>
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct Player {
+    name: String,
+    commander: String,
+    winner: bool
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct CreateGamePayload {
+    date: String,
+    players: Vec<Player>,
 }
 
 #[function_component(App)]
@@ -30,7 +49,6 @@ pub fn app() -> Html {
                     .unwrap();
                 players.set(fetched_players.names);
             });
-            || ()
         });
     }
 
@@ -71,21 +89,58 @@ pub fn app() -> Html {
         })
     };
 
-    let winner_selection = use_state(|| None);
+    let winner_selection = use_state(|| "Draw".to_string());
 
     let on_winner_select = {
         let winner_selection = winner_selection.clone();
         Callback::from(move |winner: String| {
-            winner_selection.set(Some(winner));
+            winner_selection.set(winner);
         })
     };
 
 
-    //let game_submit = {
-    //    let commander_inputs = commander_inputs.clone();
-    //    let selected_players = selected_players.clone();
-    //    let winner
-    //}
+    let on_game_submit = {
+        let commander_inputs = commander_inputs.clone();
+        let selected_players = selected_players.clone();
+        let winner = winner_selection.clone();
+        let date = "1/3/2024".to_string();
+        let mut players: Vec<Player> = Vec::new();
+        for index in 0..4 {
+            if selected_players[index] != "" {
+                players.push(
+                    Player{
+                        commander: commander_inputs[index].clone(),
+                        name: selected_players[index].clone(),
+                        winner: *winner == selected_players[index].clone()
+                });
+            }
+        }
+
+        let payload = CreateGamePayload{
+            date,
+            players
+        };
+
+        Callback::from(move |_| {
+            let payload = payload.clone();
+            log!(format!("{:?}", payload));
+            wasm_bindgen_futures::spawn_local(async move {
+                let response: PostResponse = Request::post("http://localhost:3000/games")
+                    .json(&payload)
+                    .unwrap()
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+
+                if !response.success {
+                    panic!("Failed to POST to /games");
+                }
+            });
+        })
+    };
 
 
     html! {
@@ -110,11 +165,11 @@ pub fn app() -> Html {
                     <td><WinnerSelect chosen_players={(*selected_players).clone()} on_click={on_winner_select} /></td>
                 </tr>
             </table>
-            <input type="submit" value="Submit"/>
+            <button onclick={on_game_submit.clone()}>{"Submit"}</button>
             <br/>
             <label>{"Add new player"}</label>
             <input id="new-player-input" class="new-player-input"/>
-            <input type="submit" value="Submit"/>
+            //<input type="submit" value="Submit"/>
         </main>
     }
 }
