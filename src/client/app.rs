@@ -2,7 +2,9 @@ use gloo_net::http::Request;
 use wasm_bindgen_futures;
 use serde::{Serialize, Deserialize};
 use gloo_console::log;
+use gloo;
 use crate::components::player_select::*;
+use crate::components::rank_select::*;
 use crate::components::winner_select::*;
 use crate::components::commander_input::*;
 use crate::components::player_data::*;
@@ -23,7 +25,7 @@ struct PostResponse {
 struct Player {
     name: String,
     commander: String,
-    winner: bool
+    rank: i32
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -69,6 +71,8 @@ pub fn app() -> Html {
 
     let selected_players = use_state(|| vec!["".to_string(), "".to_string(), "".to_string(), "".to_string()]);
 
+    let num_selected_players = selected_players.iter().filter(|player| *player != "").count();
+
     let on_player_select = |index: usize| {
         let selected_players = selected_players.clone();
         Callback::from(move |player: String| {
@@ -85,6 +89,16 @@ pub fn app() -> Html {
         })
     };
 
+    let selected_ranks = use_state(|| [0; 4]);
+
+    let select_rank_callback = {
+        let selected_ranks = selected_ranks.clone();
+        Callback::from(move |(index, rank): (usize, i32)|{
+            let mut copy = (*selected_ranks).clone();
+            copy[index] = rank;
+            selected_ranks.set(copy);
+        })
+    };
 
     let commander_inputs = use_state(|| vec!["".to_string(), "".to_string(), "".to_string(), "".to_string()]);
 
@@ -104,20 +118,10 @@ pub fn app() -> Html {
         })
     };
 
-    let winner_selection = use_state(|| "Draw".to_string());
-
-    let on_winner_select = {
-        let winner_selection = winner_selection.clone();
-        Callback::from(move |winner: String| {
-            winner_selection.set(winner);
-        })
-    };
-
-
     let on_game_submit = {
         let commander_inputs = commander_inputs.clone();
         let selected_players = selected_players.clone();
-        let winner = winner_selection.clone();
+        let selected_ranks = selected_ranks.clone();
         let date = "1/3/2024".to_string();
         let mut players: Vec<Player> = Vec::new();
         for index in 0..4 {
@@ -126,7 +130,7 @@ pub fn app() -> Html {
                     Player{
                         commander: commander_inputs[index].clone(),
                         name: selected_players[index].clone(),
-                        winner: *winner == selected_players[index].clone()
+                        rank: selected_ranks[index].clone()
                 });
             }
         }
@@ -164,26 +168,27 @@ pub fn app() -> Html {
                 <tr>
                     <td><label>{ "Players" }</label></td>
                     <td><label>{ "Commanders" }</label></td>
+                    <td><label>{ "Rank" }</label></td>
                 </tr>
                 <tr>
                     <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(0)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(0)}/></td>
+                    <td><RankSelect select_callback={select_rank_callback.clone()} index={0} num_players={num_selected_players.clone()}/></td>
                 </tr>
                 <tr>
                     <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(1)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(1)}/></td>
+                    <td><RankSelect select_callback={select_rank_callback.clone()} index={1} num_players={num_selected_players.clone()}/></td>
                 </tr>
                 <tr>
                     <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(2)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(2)}/></td>
+                    <td><RankSelect select_callback={select_rank_callback.clone()} index={2} num_players={num_selected_players.clone()}/></td>
                 </tr>
                 <tr>
                     <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(3)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(3)}/></td>
-                </tr>
-                <tr>
-                    <td><label>{ "Winner" }</label></td>
-                    <td><WinnerSelect chosen_players={(*selected_players).clone()} on_click={on_winner_select} /></td>
+                    <td><RankSelect select_callback={select_rank_callback.clone()} index={3} num_players={num_selected_players.clone()}/></td>
                 </tr>
             </table>
             <button onclick={on_game_submit.clone()}>{"Submit"}</button>

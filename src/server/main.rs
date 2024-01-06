@@ -40,7 +40,7 @@ async fn main() -> Result<(), sqlx::Error> {
             game_id INTEGER NOT NULL,
             player_id INTEGER NOT NULL,
             commander TEXT NOT NULL,
-            winner BOOLEAN NOT NULL,
+            rank INTEGER NOT NULL,
             FOREIGN KEY (game_id) REFERENCES games(id),
             FOREIGN KEY (player_id) REFERENCES players(id))").execute(&pool).await?;
 
@@ -83,7 +83,7 @@ struct PlayerPayload {
 struct Player {
     name: String,
     commander: String,
-    winner: bool
+    rank: i32
 }
 
 #[derive(Serialize, Deserialize)]
@@ -118,7 +118,7 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
         match player_row_result {
             Ok(player_row) => {
                 let player_id = player_row.0;
-                sqlx::query("INSERT INTO games_players (game_id, player_id, commander, winner) VALUES($1, $2, $3, $4)").bind(game_id).bind(player_id).bind(player.commander).bind(player.winner).execute(&state.pool).await.unwrap();
+                sqlx::query("INSERT INTO games_players (game_id, player_id, commander, rank) VALUES($1, $2, $3, $4)").bind(game_id).bind(player_id).bind(player.commander).bind(player.rank).execute(&state.pool).await.unwrap();
             },
             Err(error) => {
                 return Json(json!({"error": error.to_string(), "success": false}));
@@ -140,7 +140,7 @@ async fn get_games(state: Arc<AppState>) -> Json<Value> {
         games: vec![]
     };
 
-    let rows: Vec<(i64, String, String, String, i32)> = sqlx::query_as("SELECT games.id, date, players.name, commander, winner FROM games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&state.pool).await.unwrap();
+    let rows: Vec<(i64, String, String, String, i32)> = sqlx::query_as("SELECT games.id, date, players.name, commander, rank FROM games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&state.pool).await.unwrap();
 
 
     let ids = rows.iter().fold(Vec::new(), |mut acc, row| {
@@ -162,7 +162,7 @@ async fn get_games(state: Arc<AppState>) -> Json<Value> {
             players.push(Player{
                 name: game_row.2.clone(),
                 commander: game_row.3.clone(),
-                winner: game_row.4 == 1
+                rank: game_row.4
             })
         }
 
