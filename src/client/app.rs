@@ -163,29 +163,32 @@ pub fn app() -> Html {
             <table>
                 <tr>
                     <td><label>{ "Players" }</label></td>
-                    <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(0)}/></td>
-                    <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(1)}/></td>
-                    <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(2)}/></td>
-                    <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(3)}/></td>
+                    <td><label>{ "Commanders" }</label></td>
                 </tr>
                 <tr>
-                    <label>{ "Commanders" }</label>
+                    <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(0)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(0)}/></td>
+                </tr>
+                <tr>
+                    <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(1)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(1)}/></td>
+                </tr>
+                <tr>
+                    <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(2)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(2)}/></td>
+                </tr>
+                <tr>
+                    <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(3)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(3)}/></td>
                 </tr>
                 <tr>
-                    <label>{ "Winner" }</label>
+                    <td><label>{ "Winner" }</label></td>
                     <td><WinnerSelect chosen_players={(*selected_players).clone()} on_click={on_winner_select} /></td>
                 </tr>
             </table>
             <button onclick={on_game_submit.clone()}>{"Submit"}</button>
             <br/>
             <PlayerData players_update_callback={player_update_callback.clone()}/>
-            //<label>{"Add new player"}</label>
-            //<input id="new-player-input" class="new-player-input"/>
-            //<input type="submit" value="Submit"/>
         </main>
     }
 }
