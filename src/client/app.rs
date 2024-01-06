@@ -5,6 +5,7 @@ use gloo_console::log;
 use crate::components::player_select::*;
 use crate::components::winner_select::*;
 use crate::components::commander_input::*;
+use crate::components::player_data::*;
 use yew::prelude::*;
 
 #[derive(Deserialize)]
@@ -34,6 +35,9 @@ struct CreateGamePayload {
 #[function_component(App)]
 pub fn app() -> Html {
 
+    let player_add_counter = use_state(|| 0);
+
+
     let players = use_state(|| Vec::new());
     {
         let players = players.clone();
@@ -51,6 +55,17 @@ pub fn app() -> Html {
             });
         });
     }
+
+    let player_update_callback = {
+        let players = players.clone();
+
+        Callback::from(move |player: String| {
+            let players = players.clone();
+            let mut new_players = (*players).clone();
+            new_players.push(player);
+            players.set(new_players);
+        })
+    };
 
     let selected_players = use_state(|| vec!["".to_string(), "".to_string(), "".to_string(), "".to_string()]);
 
@@ -167,8 +182,9 @@ pub fn app() -> Html {
             </table>
             <button onclick={on_game_submit.clone()}>{"Submit"}</button>
             <br/>
-            <label>{"Add new player"}</label>
-            <input id="new-player-input" class="new-player-input"/>
+            <PlayerData players_update_callback={player_update_callback.clone()}/>
+            //<label>{"Add new player"}</label>
+            //<input id="new-player-input" class="new-player-input"/>
             //<input type="submit" value="Submit"/>
         </main>
     }
