@@ -20,8 +20,8 @@ pub struct Props {
     pub players_update_callback: Callback<String>
 }
 
-#[function_component(PlayerData)]
-pub fn player_data(Props{ players_update_callback }: &Props) -> Html {
+#[function_component(NewPlayerForm)]
+pub fn new_player_form(Props{ players_update_callback }: &Props) -> Html {
     let input_value = use_state(|| "".to_string());
     //let players_update_callback = players_update_callback.clone();
 

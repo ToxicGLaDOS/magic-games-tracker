@@ -8,30 +8,24 @@ pub struct PlayersSelectProps {
 
 #[function_component(PlayersSelect)]
 pub fn players_select(PlayersSelectProps { players, on_click }: &PlayersSelectProps) -> Html {
-    let on_click = on_click.clone();
-    let default_on_player_select = {
+
+    let on_click = move |player: String| {
         let on_click = on_click.clone();
         Callback::from(move |_| {
-            on_click.emit("".to_string())
+            let player = player.clone();
+            on_click.emit(player);
         })
     };
 
     html!{
         <select class="player-select">
 
-        <option onclick={default_on_player_select} value=""></option>
+        <option onclick={on_click("".to_string())} value=""></option>
         {
             players.iter().map(|player| {
-                let on_player_select = {
-                    let on_click = on_click.clone();
-                    let player = player.clone();
-                    Callback::from(move |_| {
-                        on_click.emit(player.clone())
-                    })
-                };
 
                 html!{
-                    <option onclick={on_player_select} value={player.clone()}>{player.clone()}</option>
+                    <option onclick={on_click(player.clone())} value={player.clone()}>{player.clone()}</option>
                 }
             }
             ).collect::<Html>()
