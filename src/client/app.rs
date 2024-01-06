@@ -5,6 +5,7 @@ use gloo_console::log;
 use crate::components::player_select::*;
 use crate::components::winner_select::*;
 use crate::components::commander_input::*;
+use crate::components::player_data::*;
 use yew::prelude::*;
 
 #[derive(Deserialize)]
@@ -167,8 +168,9 @@ pub fn app() -> Html {
             </table>
             <button onclick={on_game_submit.clone()}>{"Submit"}</button>
             <br/>
-            <label>{"Add new player"}</label>
-            <input id="new-player-input" class="new-player-input"/>
+            <PlayerData/>
+            //<label>{"Add new player"}</label>
+            //<input id="new-player-input" class="new-player-input"/>
             //<input type="submit" value="Submit"/>
         </main>
     }
