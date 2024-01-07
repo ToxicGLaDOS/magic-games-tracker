@@ -1,7 +1,10 @@
 use gloo_net::http::Request;
 use wasm_bindgen_futures;
 use gloo_console::log;
+use web_sys::HtmlInputElement;
+use wasm_bindgen::JsCast;
 use gloo;
+use chrono::Local;
 use magic_games_tracker::messages::*;
 use crate::components::player_select::*;
 use crate::components::rank_select::*;
@@ -12,7 +15,6 @@ use yew::prelude::*;
 
 #[function_component(App)]
 pub fn app() -> Html {
-
     let players = use_state(|| Vec::new());
     {
         let players = players.clone();
@@ -77,11 +79,24 @@ pub fn app() -> Html {
         })
     };
 
+    let date = use_state(|| String::from(Local::now().format("%Y-%m-%dT%H:%M").to_string()));
+
+    let date_oninput = {
+        let date = date.clone();
+        Callback::from(move |event: InputEvent| {
+            let input_event_target = event.target().unwrap();
+            let current_input_text = input_event_target.unchecked_into::<HtmlInputElement>();
+            log!(current_input_text.value().clone());
+
+            date.set(current_input_text.value());
+        })
+    };
+
     let on_game_submit = {
         let commander_inputs = commander_inputs.clone();
         let selected_players = selected_players.clone();
         let selected_ranks = selected_ranks.clone();
-        let date = "1/3/2024".to_string();
+        let date = date.clone();
         let mut players: Vec<Player> = Vec::new();
         for index in 0..4 {
             if selected_players[index] != "" {
@@ -95,7 +110,7 @@ pub fn app() -> Html {
         }
 
         let payload = CreateGamePayload{
-            date,
+            date: (*date).clone(),
             players
         };
 
@@ -120,9 +135,10 @@ pub fn app() -> Html {
         })
     };
 
-
     html! {
         <main>
+            <label>{ "Date" }</label>
+            <input type="datetime-local" oninput={date_oninput} value={(*date).clone()} />
             <table>
                 <tr>
                     <td><label>{ "Players" }</label></td>
