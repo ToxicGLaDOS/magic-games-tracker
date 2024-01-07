@@ -27,13 +27,9 @@ pub fn rank_select(Props{ num_players, select_callback }: &Props) -> Html {
         <select onchange={on_change.clone()} class="rank-select">
             <option value={0} selected=true>{"Draw"}</option>
             {
-                (0..4).map(|x| {
-                    if x < *num_players {
-                        html! {
-                            <option value={(x+1).to_string()}>{(x+1).clone()}</option>
-                        }
-                    } else {
-                        html! {}
+                (0..*num_players).map(|x| {
+                    html! {
+                        <option key={x+1} value={(x+1).to_string()}>{(x+1).clone()}</option>
                     }
                 }).collect::<Html>()
             }

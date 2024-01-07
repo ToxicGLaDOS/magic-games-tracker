@@ -25,7 +25,7 @@ pub fn players_select(PlayersSelectProps { players, on_click }: &PlayersSelectPr
             players.iter().map(|player| {
 
                 html!{
-                    <option onclick={on_click(player.clone())} value={player.clone()}>{player.clone()}</option>
+                    <option key={player.clone()} onclick={on_click(player.clone())} value={player.clone()}>{player.clone()}</option>
                 }
             }
             ).collect::<Html>()
