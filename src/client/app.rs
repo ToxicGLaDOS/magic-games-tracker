@@ -1,37 +1,14 @@
 use gloo_net::http::Request;
 use wasm_bindgen_futures;
-use serde::{Serialize, Deserialize};
 use gloo_console::log;
 use gloo;
+use magic_games_tracker::messages::*;
 use crate::components::player_select::*;
 use crate::components::rank_select::*;
 use crate::components::commander_input::*;
 use crate::components::player_data::*;
 use yew::prelude::*;
 
-#[derive(Deserialize)]
-struct PlayersResponse{
-    names: Vec<String>,
-}
-
-#[derive(Deserialize)]
-struct PostResponse {
-    success: bool,
-    error: Option<bool>
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct Player {
-    name: String,
-    commander: String,
-    rank: usize
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct CreateGamePayload {
-    date: String,
-    players: Vec<Player>,
-}
 
 #[function_component(App)]
 pub fn app() -> Html {

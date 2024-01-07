@@ -5,8 +5,8 @@ use axum::{
     Json,
 };
 use tower_http::cors::CorsLayer;
-use serde::{Serialize, Deserialize};
 use sqlx::SqlitePool;
+use magic_games_tracker::messages::*;
 use sqlx::sqlite::SqliteConnectOptions;
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -74,40 +74,6 @@ async fn main() -> Result<(), sqlx::Error> {
     Ok(())
 }
 
-#[derive(Serialize, Deserialize)]
-struct PlayerPayload {
-    name: String
-}
-
-#[derive(Serialize, Deserialize)]
-struct Player {
-    name: String,
-    commander: String,
-    rank: i32
-}
-
-#[derive(Serialize, Deserialize)]
-struct CreateGamePayload {
-    date: String,
-    players: Vec<Player>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct GamesResponse {
-    games: Vec<Game>
-}
-
-#[derive(Serialize, Deserialize)]
-struct Game {
-    date: String,
-    players: Vec<Player>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct PlayersResponse {
-    names: Vec<String>
-}
-
 async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>) -> Json<Value> {
     let row: (i64, ) = sqlx::query_as("INSERT INTO games (date) VALUES($1) RETURNING id").bind(payload.date).fetch_one(&state.pool).await.unwrap();
     let game_id = row.0;
@@ -118,7 +84,7 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
         match player_row_result {
             Ok(player_row) => {
                 let player_id = player_row.0;
-                sqlx::query("INSERT INTO games_players (game_id, player_id, commander, rank) VALUES($1, $2, $3, $4)").bind(game_id).bind(player_id).bind(player.commander).bind(player.rank).execute(&state.pool).await.unwrap();
+                sqlx::query("INSERT INTO games_players (game_id, player_id, commander, rank) VALUES($1, $2, $3, $4)").bind(game_id).bind(player_id).bind(player.commander).bind(player.rank as i32).execute(&state.pool).await.unwrap();
             },
             Err(error) => {
                 return Json(json!({"error": error.to_string(), "success": false}));
@@ -162,7 +128,7 @@ async fn get_games(state: Arc<AppState>) -> Json<Value> {
             players.push(Player{
                 name: game_row.2.clone(),
                 commander: game_row.3.clone(),
-                rank: game_row.4
+                rank: game_row.4 as usize
             })
         }
 
