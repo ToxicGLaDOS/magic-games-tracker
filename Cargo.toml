@@ -12,12 +12,13 @@ edition = "2021"
 gloo-net = "0.5.0"
 wasm-bindgen = "0.2.89"
 wasm-bindgen-futures = "0.4.39"
-serde = "1.0.193"
+serde = { verions="1.0.193", features=["rc"] }
 yew = { version="0.21", features=["csr"] }
 tower-http = { version="0.5.0", features=["cors"] }
 gloo-console = "0.3.0"
 web-sys = { version="0.3.66", features = ["HtmlInputElement", "HtmlSelectElement"] }
 gloo = "0.11.0"
+implicit-clone = { version = "0.4.8", features = ["serde"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 gloo-net = "0.5.0"

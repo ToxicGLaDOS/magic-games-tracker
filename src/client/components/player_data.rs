@@ -23,7 +23,6 @@ pub struct Props {
 #[function_component(NewPlayerForm)]
 pub fn new_player_form(Props{ players_update_callback }: &Props) -> Html {
     let input_value = use_state(|| "".to_string());
-    //let players_update_callback = players_update_callback.clone();
 
     let onchange = {
         let input_value = input_value.clone();

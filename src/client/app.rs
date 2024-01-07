@@ -2,7 +2,9 @@ use gloo_net::http::Request;
 use wasm_bindgen_futures;
 use serde::{Serialize, Deserialize};
 use gloo_console::log;
+use std::rc::Rc;
 use gloo;
+use implicit_clone::unsync::IArray;
 use crate::components::player_select::*;
 use crate::components::rank_select::*;
 use crate::components::commander_input::*;
@@ -11,7 +13,7 @@ use yew::prelude::*;
 
 #[derive(Deserialize)]
 struct PlayersResponse{
-    names: Vec<String>,
+    names: Vec<Rc<str>>,
 }
 
 #[derive(Deserialize)]
@@ -36,20 +38,23 @@ struct CreateGamePayload {
 #[function_component(App)]
 pub fn app() -> Html {
 
-    let players = use_state(|| Vec::new());
+    let players: UseStateHandle<IArray<Rc<str>>> = use_state(|| IArray::<Rc<str>>::default());
     {
         let players = players.clone();
         use_effect_with((), move |_| {
             let players = players.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let fetched_players: PlayersResponse = Request::get("http://localhost:3000/players")
+                let players_response: PlayersResponse = Request::get("http://localhost:3000/players")
                     .send()
                     .await
                     .unwrap()
                     .json()
                     .await
                     .unwrap();
-                players.set(fetched_players.names);
+
+                let fetched_players = IArray::from(players_response.names);
+
+                players.set(fetched_players);
             });
         });
     }
@@ -59,19 +64,19 @@ pub fn app() -> Html {
 
         Callback::from(move |player: String| {
             let players = players.clone();
-            let mut new_players = (*players).clone();
-            new_players.push(player);
-            players.set(new_players);
+            let mut new_players = (*players).to_vec();
+            new_players.push(Rc::from(player));
+            players.set(IArray::from(new_players));
         })
     };
 
-    let selected_players = use_state(|| ["".to_string(), "".to_string(), "".to_string(), "".to_string()]);
+    let selected_players = use_state(|| [String::from(""), String::from(""), String::from(""), String::from("")]);
 
     let num_selected_players = selected_players.iter().filter(|player| *player != "").count();
 
     let on_player_select = |index: usize| {
         let selected_players = selected_players.clone();
-        Callback::from(move |player: String| {
+        Callback::from(move |player| {
             let mut selected_players_copy = (*selected_players).clone();
             selected_players_copy[index] = player;
             selected_players.set(selected_players_copy);
@@ -89,11 +94,11 @@ pub fn app() -> Html {
         })
     };
 
-    let commander_inputs = use_state(|| ["".to_string(), "".to_string(), "".to_string(), "".to_string()]);
+    let commander_inputs = use_state(|| [String::from(""), String::from(""), String::from(""), String::from("")]);
 
     let on_commander_input = |index: usize| {
         let commander_inputs = commander_inputs.clone();
-        Callback::from(move |commander: String| {
+        Callback::from(move |commander| {
             let mut commander_inputs_copy = (*commander_inputs).clone();
             commander_inputs_copy[index] = commander;
             commander_inputs.set(commander_inputs_copy);
@@ -110,8 +115,8 @@ pub fn app() -> Html {
             if selected_players[index] != "" {
                 players.push(
                     Player{
-                        commander: commander_inputs[index].clone(),
-                        name: selected_players[index].clone(),
+                        commander: commander_inputs[index].to_string(),
+                        name: selected_players[index].to_string(),
                         rank: selected_ranks[index].clone()
                 });
             }
