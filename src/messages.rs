@@ -25,7 +25,8 @@ pub struct GamesResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct Game {
-    pub date: String,
+    pub start_datetime: String,
+    pub end_datetime: String,
     pub players: Vec<Player>,
 }
 
@@ -36,6 +37,7 @@ pub struct PlayerPayload {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CreateGamePayload {
-    pub date: String,
+    pub start_datetime: String,
+    pub end_datetime: String,
     pub players: Vec<Player>,
 }

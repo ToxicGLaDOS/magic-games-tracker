@@ -32,7 +32,8 @@ async fn main() -> Result<(), sqlx::Error> {
 
     sqlx::query("CREATE TABLE IF NOT EXISTS games (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT NOT NULL
+            start_datetime TEXT NOT NULL,
+            end_datetime TEXT NOT NULL
             )").execute(&pool).await?;
 
     sqlx::query("CREATE TABLE IF NOT EXISTS games_players (
@@ -75,7 +76,7 @@ async fn main() -> Result<(), sqlx::Error> {
 }
 
 async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>) -> Json<Value> {
-    let row: (i64, ) = sqlx::query_as("INSERT INTO games (date) VALUES($1) RETURNING id").bind(payload.date).fetch_one(&state.pool).await.unwrap();
+    let row: (i64, ) = sqlx::query_as("INSERT INTO games (start_datetime, end_datetime) VALUES($1, $2) RETURNING id").bind(payload.start_datetime).bind(payload.end_datetime).fetch_one(&state.pool).await.unwrap();
     let game_id = row.0;
 
     for player in payload.players {
@@ -106,7 +107,7 @@ async fn get_games(state: Arc<AppState>) -> Json<Value> {
         games: vec![]
     };
 
-    let rows: Vec<(i64, String, String, String, i32)> = sqlx::query_as("SELECT games.id, date, players.name, commander, rank FROM games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&state.pool).await.unwrap();
+    let rows: Vec<(i64, String, String, String, String, i32)> = sqlx::query_as("SELECT games.id, start_datetime, end_datetime, players.name, commander, rank FROM games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&state.pool).await.unwrap();
 
 
     let ids = rows.iter().fold(Vec::new(), |mut acc, row| {
@@ -118,22 +119,24 @@ async fn get_games(state: Arc<AppState>) -> Json<Value> {
     });
 
     for id in ids {
-        let game_rows: Vec<&(i64, String, String, String, i32)> = rows.iter().filter(|row| {
+        let game_rows: Vec<&(i64, String, String, String, String, i32)> = rows.iter().filter(|row| {
             row.0 == id
         }).collect();
 
         let mut players: Vec<Player> = Vec::new();
-        let date: String = game_rows[0].1.clone();
+        let start_datetime: String = game_rows[0].1.clone();
+        let end_datetime: String = game_rows[0].2.clone();
         for game_row in game_rows {
             players.push(Player{
-                name: game_row.2.clone(),
-                commander: game_row.3.clone(),
-                rank: game_row.4 as usize
+                name: game_row.3.clone(),
+                commander: game_row.4.clone(),
+                rank: game_row.5 as usize
             })
         }
 
         let game = Game{
-            date,
+            start_datetime,
+            end_datetime,
             players
         };
 

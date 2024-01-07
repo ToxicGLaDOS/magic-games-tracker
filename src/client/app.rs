@@ -79,16 +79,28 @@ pub fn app() -> Html {
         })
     };
 
-    let date = use_state(|| String::from(Local::now().format("%Y-%m-%dT%H:%M").to_string()));
+    let start_datetime = use_state(|| String::from(Local::now().format("%Y-%m-%dT%H:%M").to_string()));
+    let end_datetime = use_state(|| String::from(Local::now().format("%Y-%m-%dT%H:%M").to_string()));
 
-    let date_oninput = {
-        let date = date.clone();
+    let start_date_oninput = {
+        let start_datetime = start_datetime.clone();
         Callback::from(move |event: InputEvent| {
             let input_event_target = event.target().unwrap();
             let current_input_text = input_event_target.unchecked_into::<HtmlInputElement>();
             log!(current_input_text.value().clone());
 
-            date.set(current_input_text.value());
+            start_datetime.set(current_input_text.value());
+        })
+    };
+
+    let end_date_oninput = {
+        let end_datetime = end_datetime.clone();
+        Callback::from(move |event: InputEvent| {
+            let input_event_target = event.target().unwrap();
+            let current_input_text = input_event_target.unchecked_into::<HtmlInputElement>();
+            log!(current_input_text.value().clone());
+
+            end_datetime.set(current_input_text.value());
         })
     };
 
@@ -96,7 +108,7 @@ pub fn app() -> Html {
         let commander_inputs = commander_inputs.clone();
         let selected_players = selected_players.clone();
         let selected_ranks = selected_ranks.clone();
-        let date = date.clone();
+        let start_datetime = start_datetime.clone();
         let mut players: Vec<Player> = Vec::new();
         for index in 0..4 {
             if selected_players[index] != "" {
@@ -110,7 +122,8 @@ pub fn app() -> Html {
         }
 
         let payload = CreateGamePayload{
-            date: (*date).clone(),
+            start_datetime: (*start_datetime).clone(),
+            end_datetime: (*end_datetime).clone(),
             players
         };
 
@@ -137,8 +150,18 @@ pub fn app() -> Html {
 
     html! {
         <main>
-            <label>{ "Date" }</label>
-            <input type="datetime-local" oninput={date_oninput} value={(*date).clone()} />
+            <table>
+                <tr>
+                    <td><label>{ "Start time" }</label></td>
+                    <td><input type="datetime-local" oninput={start_date_oninput} value={(*start_datetime).clone()} /></td>
+                </tr>
+
+                <tr>
+                    <td><label>{ "End time" }</label></td>
+                    <td><input type="datetime-local" oninput={end_date_oninput} value={(*end_datetime).clone()} /></td>
+                </tr>
+            </table>
+
             <table>
                 <tr>
                     <td><label>{ "Players" }</label></td>
