@@ -4,14 +4,23 @@ use gloo_console::log;
 use web_sys::HtmlInputElement;
 use wasm_bindgen::JsCast;
 use gloo;
+use gloo_timers::callback::Timeout;
 use chrono::Local;
 use magic_games_tracker::messages::*;
+use yew_hooks::prelude::*;
+use crate::components::toast::*;
 use crate::components::player_select::*;
 use crate::components::rank_select::*;
 use crate::components::commander_input::*;
 use crate::components::player_data::*;
 use yew::prelude::*;
 
+fn create_message(messages: UseListHandle<String>, message: String) {
+    messages.push(message);
+    Timeout::new(5000, move || {
+        messages.remove(0);
+    }).forget();
+}
 
 #[function_component(App)]
 pub fn app() -> Html {
@@ -93,6 +102,8 @@ pub fn app() -> Html {
         })
     };
 
+    let messages = use_list(vec![]);
+
     let end_date_oninput = {
         let end_datetime = end_datetime.clone();
         Callback::from(move |event: InputEvent| {
@@ -105,6 +116,7 @@ pub fn app() -> Html {
     };
 
     let on_game_submit = {
+        let messages = messages.clone();
         let commander_inputs = commander_inputs.clone();
         let selected_players = selected_players.clone();
         let selected_ranks = selected_ranks.clone();
@@ -128,6 +140,7 @@ pub fn app() -> Html {
         };
 
         Callback::from(move |_| {
+            let messages = messages.clone();
             let payload = payload.clone();
             log!(format!("{:?}", payload));
             wasm_bindgen_futures::spawn_local(async move {
@@ -142,11 +155,12 @@ pub fn app() -> Html {
                     .unwrap();
 
                 if !response.success {
-                    panic!("Failed to POST to /games");
+                    create_message(messages.clone(), format!("Failed to POST to /games. Error was: {}", response.error.unwrap()));
                 }
             });
         })
     };
+
 
     html! {
         <main>
@@ -192,6 +206,15 @@ pub fn app() -> Html {
             <button onclick={on_game_submit.clone()}>{"Submit"}</button>
             <br/>
             <NewPlayerForm players_update_callback={player_update_callback.clone()}/>
+            <div class="toast-container">
+                {
+                    messages.current().iter().map(|message| {
+                        html!{
+                            <Toast message={message.to_string()}/>
+                        }
+                    }).collect::<Html>()
+                }
+            </div>
         </main>
     }
 }

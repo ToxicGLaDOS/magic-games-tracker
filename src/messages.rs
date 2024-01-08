@@ -8,7 +8,7 @@ pub struct PlayersResponse{
 #[derive(Deserialize)]
 pub struct PostResponse {
     pub success: bool,
-    pub error: Option<bool>
+    pub error: Option<String>
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
