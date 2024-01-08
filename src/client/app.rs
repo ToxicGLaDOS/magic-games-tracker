@@ -1,3 +1,4 @@
+use chrono::TimeZone;
 use gloo_net::http::Request;
 use wasm_bindgen_futures;
 use gloo_console::log;
@@ -5,7 +6,7 @@ use web_sys::HtmlInputElement;
 use wasm_bindgen::JsCast;
 use gloo;
 use gloo_timers::callback::Timeout;
-use chrono::Local;
+use chrono::{Local, NaiveDateTime};
 use magic_games_tracker::messages::*;
 use yew_hooks::prelude::*;
 use crate::components::toast::*;
@@ -88,17 +89,23 @@ pub fn app() -> Html {
         })
     };
 
-    let start_datetime = use_state(|| String::from(Local::now().format("%Y-%m-%dT%H:%M").to_string()));
-    let end_datetime = use_state(|| String::from(Local::now().format("%Y-%m-%dT%H:%M").to_string()));
+    // "%Y-%m-%dT%H:%M"
+    let start_datetime = use_state(|| Local::now());
+    let end_datetime = use_state(|| Local::now());
 
     let start_date_oninput = {
         let start_datetime = start_datetime.clone();
         Callback::from(move |event: InputEvent| {
             let input_event_target = event.target().unwrap();
-            let current_input_text = input_event_target.unchecked_into::<HtmlInputElement>();
-            log!(current_input_text.value().clone());
+            let mut current_input_text = input_event_target.unchecked_into::<HtmlInputElement>().value();
 
-            start_datetime.set(current_input_text.value());
+            // Set end to :00 so it can be converted to a DateTime properly
+            current_input_text.push_str(":00");
+
+            let from: NaiveDateTime = current_input_text.parse().unwrap();
+            let date_time = Local.from_local_datetime(&from).unwrap();
+
+            start_datetime.set(date_time);
         })
     };
 
@@ -108,10 +115,22 @@ pub fn app() -> Html {
         let end_datetime = end_datetime.clone();
         Callback::from(move |event: InputEvent| {
             let input_event_target = event.target().unwrap();
-            let current_input_text = input_event_target.unchecked_into::<HtmlInputElement>();
-            log!(current_input_text.value().clone());
+            let mut current_input_text = input_event_target.unchecked_into::<HtmlInputElement>().value();
+            // Set end to :00 so it can be converted to a DateTime properly
+            current_input_text.push_str(":00");
 
-            end_datetime.set(current_input_text.value());
+            let from: NaiveDateTime = current_input_text.parse().unwrap();
+            let date_time = Local.from_local_datetime(&from).unwrap();
+
+            end_datetime.set(date_time);
+        })
+    };
+
+    let add_message = {
+        let messages = messages.clone();
+        Callback::from(move |m: String| {
+            let messages = messages.clone();
+            create_message(messages.clone(), m);
         })
     };
 
@@ -134,8 +153,8 @@ pub fn app() -> Html {
         }
 
         let payload = CreateGamePayload{
-            start_datetime: (*start_datetime).clone(),
-            end_datetime: (*end_datetime).clone(),
+            start_datetime: start_datetime.to_rfc3339(),
+            end_datetime: end_datetime.to_rfc3339(),
             players
         };
 
@@ -143,6 +162,7 @@ pub fn app() -> Html {
             let messages = messages.clone();
             let payload = payload.clone();
             log!(format!("{:?}", payload));
+
             wasm_bindgen_futures::spawn_local(async move {
                 let response: PostResponse = Request::post("http://localhost:3000/games")
                     .json(&payload)
@@ -167,12 +187,12 @@ pub fn app() -> Html {
             <table>
                 <tr>
                     <td><label>{ "Start time" }</label></td>
-                    <td><input type="datetime-local" oninput={start_date_oninput} value={(*start_datetime).clone()} /></td>
+                    <td><input type="datetime-local" oninput={start_date_oninput} value={format!("{}", (*start_datetime).format("%Y-%m-%dT%H:%M"))} /></td>
                 </tr>
 
                 <tr>
                     <td><label>{ "End time" }</label></td>
-                    <td><input type="datetime-local" oninput={end_date_oninput} value={(*end_datetime).clone()} /></td>
+                    <td><input type="datetime-local" oninput={end_date_oninput} value={format!("{}", (*end_datetime).format("%Y-%m-%dT%H:%M"))} /></td>
                 </tr>
             </table>
 
@@ -205,7 +225,7 @@ pub fn app() -> Html {
             </table>
             <button onclick={on_game_submit.clone()}>{"Submit"}</button>
             <br/>
-            <NewPlayerForm players_update_callback={player_update_callback.clone()}/>
+            <NewPlayerForm players_update_callback={player_update_callback.clone()} message_callback={add_message}/>
             <div class="toast-container">
                 {
                     messages.current().iter().map(|message| {

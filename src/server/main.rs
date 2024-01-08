@@ -4,8 +4,11 @@ use axum::{
     Router,
     Json,
 };
+use itertools::Itertools;
+use std::collections::HashMap;
 use tower_http::cors::CorsLayer;
 use sqlx::SqlitePool;
+use chrono::DateTime;
 use magic_games_tracker::messages::*;
 use sqlx::sqlite::SqliteConnectOptions;
 use serde_json::{Value, json};
@@ -76,6 +79,118 @@ async fn main() -> Result<(), sqlx::Error> {
 }
 
 async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>) -> Json<Value> {
+    if payload.players.len() < 2 {
+        return Json(json!(
+                    PostResponse {
+                        success: false,
+                        error: Some(String::from("A game must have at least two players"))
+                    }
+                ));
+    }
+
+    let num_draws = payload.players.iter().filter(|player| player.rank == 0).count();
+    // If any player is marked as draw
+    if num_draws != 0 && num_draws != payload.players.len() {
+        return Json(json!(
+            PostResponse {
+                success: false,
+                error: Some(String::from("If one player has drawn all players must have drawn"))
+            }
+        ));
+    }
+
+    let mut player_counts = HashMap::<String, i32>::new();
+
+    for player in payload.players.iter() {
+        player_counts.entry(player.name.clone()).and_modify(|counter| *counter += 1).or_insert(1);
+    }
+
+    for player_count in player_counts.into_values() {
+        if player_count > 1 {
+            return Json(json!(
+                PostResponse {
+                    success: false,
+                    error: Some(String::from("Cannot have the same player multiple times"))
+                }));
+        }
+    }
+
+    let start_datetime = DateTime::parse_from_rfc3339(&payload.start_datetime).unwrap();
+    let end_datetime = DateTime::parse_from_rfc3339(&payload.end_datetime).unwrap();
+
+
+    if end_datetime <= start_datetime {
+        return Json(json!(
+            PostResponse {
+                success: false,
+                error: Some(String::from("End datetime cannot be earlier than or equal to start datetime"))
+            }));
+    }
+
+    let sorted_ranks = payload.players
+        .iter()
+        .map(|player| player.rank)
+        .sorted();
+
+    // If all ranks are 1 that should be a marked a draw
+    if sorted_ranks.clone().filter(|rank| (*rank).clone() == 1).count() == payload.players.len() {
+        return Json(json!(
+            PostResponse {
+                success: false,
+                error: Some(String::from("Cannot have all players ranks as 1. To mark a draw set all players rank to Draw"))
+            }));
+
+    }
+
+    if num_draws == 0 {
+        // The way this works is by taking the sorted ranks then ensuring that the first
+        // rank is 1. After that we ensure the second rank is either equal to the
+        // previous or equal to 2, then we check that third rank in order is equal to
+        // 3 or the previous rank and so on.
+
+        let enumerated_pairs = sorted_ranks
+            .tuple_windows()
+            .enumerate()
+            .map(|(index, (prev, rank))| (index + 2, (prev, rank)))
+            .collect::<Vec<(usize, (usize, usize))>>();
+
+        // If prev in the first tuple is not 1 that's a problem
+        if enumerated_pairs[0].1.0 != 1 {
+            return Json(json!(
+                PostResponse {
+                    success: false,
+                    error: Some(String::from("At least one player must come in first when there are no draws"))
+                }));
+        }
+
+        // After the first prev is validated as being 1
+        // we can compare cur to prev and the index of this pair
+        // The only gotcha is that we have to start index at 2
+        // because rankings start at 1 and due to the way tuple_windows
+        // makes pairs the first cur is actually the second element in the list
+        for (index, (prev, cur))in enumerated_pairs {
+            if index != cur && prev != cur {
+                return Json(json!(
+                    PostResponse {
+                        success: false,
+                        error: Some(String::from(format!("Ranking is invalid player with a rank {} should have rank {} or {}", cur, index, prev)))
+                    }));
+            }
+        }
+    }
+
+    for player in payload.players.iter() {
+        if player.commander == "" {
+            return Json(json!(
+                PostResponse {
+                    success: false,
+                    error: Some(String::from("Player is missing a commander"))
+                }));
+        }
+    }
+
+    // END VALIDATION
+
     let row: (i64, ) = sqlx::query_as("INSERT INTO games (start_datetime, end_datetime) VALUES($1, $2) RETURNING id").bind(payload.start_datetime).bind(payload.end_datetime).fetch_one(&state.pool).await.unwrap();
     let game_id = row.0;
 
@@ -97,9 +212,24 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
 }
 
 async fn post_player(Json(payload): Json<PlayerPayload>, state: Arc<AppState>) -> Json<Value> {
-    sqlx::query("INSERT INTO players (name) VALUES($1)").bind(payload.name).execute(&state.pool).await.unwrap();
 
-    Json(json!({ "success": true }))
+    match sqlx::query("INSERT INTO players (name) VALUES($1)").bind(payload.name).execute(&state.pool).await {
+        Ok(_) => Json(json!({ "success": true })),
+        Err(error) if error.as_database_error().unwrap().code().unwrap() == "2067" => {
+            Json(json!(
+                    PostResponse{
+                        success: false,
+                        error: Some(String::from("Player already exists"))
+                    }
+                    ))
+        }
+        Err(error) => Json(json!(
+                    PostResponse {
+                        success: false,
+                        error:  Some(error.to_string())
+                    }
+                ))
+    }
 }
 
 async fn get_games(state: Arc<AppState>) -> Json<Value> {

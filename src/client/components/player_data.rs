@@ -2,13 +2,8 @@ use gloo_net::http::Request;
 use serde::{Serialize, Deserialize};
 use web_sys::HtmlInputElement;
 use wasm_bindgen::JsCast;
+use magic_games_tracker::messages::PostResponse;
 use yew::prelude::*;
-
-#[derive(Deserialize)]
-struct PostResponse {
-    success: bool,
-    error: Option<bool>
-}
 
 #[derive(Serialize, Deserialize)]
 struct PlayerPayload {
@@ -17,13 +12,14 @@ struct PlayerPayload {
 
 #[derive(Properties, PartialEq)]
 pub struct Props {
-    pub players_update_callback: Callback<String>
+    pub players_update_callback: Callback<String>,
+    pub message_callback: Callback<String>
 }
 
 #[function_component(NewPlayerForm)]
-pub fn new_player_form(Props{ players_update_callback }: &Props) -> Html {
+pub fn new_player_form(Props{ players_update_callback, message_callback }: &Props) -> Html {
     let input_value = use_state(|| "".to_string());
-    //let players_update_callback = players_update_callback.clone();
+    let message_callback = message_callback.clone();
 
     let onchange = {
         let input_value = input_value.clone();
@@ -40,6 +36,7 @@ pub fn new_player_form(Props{ players_update_callback }: &Props) -> Html {
         let players_update_callback = players_update_callback.clone();
         Callback::from(move |_| {
             let input_value = input_value.clone();
+            let message_callback = message_callback.clone();
             let players_update_callback = players_update_callback.clone();
 
             let payload = PlayerPayload{
@@ -61,7 +58,9 @@ pub fn new_player_form(Props{ players_update_callback }: &Props) -> Html {
                     players_update_callback.emit((*input_value).clone());
                     input_value.set("".to_string());
                 }
-                // TODO: Else show an error
+                else {
+                    message_callback.emit(response.error.unwrap());
+                }
             })
 
         })

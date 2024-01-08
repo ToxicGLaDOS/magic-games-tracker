@@ -5,7 +5,7 @@ pub struct PlayersResponse{
     pub names: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct PostResponse {
     pub success: bool,
     pub error: Option<String>
