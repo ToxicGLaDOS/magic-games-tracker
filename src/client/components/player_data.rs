@@ -44,7 +44,7 @@ pub fn new_player_form(Props{ players_update_callback, message_callback }: &Prop
             };
 
             wasm_bindgen_futures::spawn_local(async move {
-                let response: PostResponse = Request::post("http://localhost:3000/players")
+                let response: PostResponse = Request::post("/api/players")
                     .json(&payload)
                     .unwrap()
                     .send()

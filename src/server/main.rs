@@ -3,44 +3,69 @@ use axum::{
     routing::get,
     Router,
     Json,
+    http::{Response, StatusCode}
 };
+use std::env;
 use itertools::Itertools;
 use std::collections::HashMap;
 use tower_http::cors::CorsLayer;
-use sqlx::SqlitePool;
+use tower_http::services::ServeDir;
 use chrono::DateTime;
+use std::time::Duration;
+use clap::Parser;
 use magic_games_tracker::messages::*;
-use sqlx::sqlite::SqliteConnectOptions;
+use sqlx::postgres::{PgPoolOptions, PgPool};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
 struct AppState {
-    pool: SqlitePool
+    pool: PgPool
+}
+#[derive(Parser, Debug)]
+struct CliOptions {
+    /// set the listen addr
+    #[clap(short = 'a', long = "addr", default_value = "127.0.0.1")]
+    addr: String,
+
+    /// set the listen port
+    #[clap(short = 'p', long = "port", default_value = "8081")]
+    port: u16,
+
+    /// set the directory where static files are to be found
+    #[clap(long = "static-dir", default_value = "./dist")]
+    static_dir: String,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
-    let options = SqliteConnectOptions::new()
-        .create_if_missing(true)
-        .filename("games.db");
+    let opts = CliOptions::parse();
 
-    let pool = SqlitePool::connect_with(options)
-        .await
-        .expect("Could not connect to sqlite db");
+    // Defaults values correspond to development postgres, not production
+    let pg_user = env::var("POSTGRES_USER").unwrap_or(String::from("postgres"));
+    let pg_password = env::var("POSTGRES_PASSWORD").unwrap_or(String::from("password"));
+    let pg_host = env::var("POSTGRES_HOST").unwrap_or(String::from("localhost"));
+    let pg_port = env::var("POSTGRES_PORT").unwrap_or(String::from("55432"));
+    let pg_database = env::var("POSTGRES_DB").unwrap_or(String::from("magic-games-tracker"));
+
+    let connection_string = format!("postgres://{}:{}@{}:{}/{}", pg_user, pg_password, pg_host, pg_port, pg_database);
+
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(connection_string.as_str()).await?;
 
     sqlx::query("CREATE TABLE IF NOT EXISTS players (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT UNIQUE NOT NULL
             )").execute(&pool).await?;
 
     sqlx::query("CREATE TABLE IF NOT EXISTS games (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            start_datetime TEXT NOT NULL,
-            end_datetime TEXT NOT NULL
+            id SERIAL PRIMARY KEY,
+            start_datetime TIMESTAMP WITH TIME ZONE NOT NULL,
+            end_datetime TIMESTAMP WITH TIME ZONE NOT NULL
             )").execute(&pool).await?;
 
     sqlx::query("CREATE TABLE IF NOT EXISTS games_players (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             game_id INTEGER NOT NULL,
             player_id INTEGER NOT NULL,
             commander TEXT NOT NULL,
@@ -52,7 +77,7 @@ async fn main() -> Result<(), sqlx::Error> {
 
     // build our application with a single route
     let app = Router::new()
-        .route("/games", get({
+        .route("/api/games", get({
                     let shared_state = Arc::clone(&shared_state);
                     || get_games(shared_state)
                 })
@@ -60,7 +85,7 @@ async fn main() -> Result<(), sqlx::Error> {
                         let shared_state = Arc::clone(&shared_state);
                         move |body| post_games(body, shared_state)
                     }))
-        .route("/players", get({
+        .route("/api/players", get({
                     let shared_state = Arc::clone(&shared_state);
                     || get_players(shared_state)
                 })
@@ -69,10 +94,13 @@ async fn main() -> Result<(), sqlx::Error> {
                         move |body| post_player(body, shared_state)
                     }))
         .layer(CorsLayer::permissive())
+        .fallback_service(
+            ServeDir::new(opts.static_dir)
+            )
         .with_state(shared_state);
 
     // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind(format!("{}:{}", opts.addr, opts.port)).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 
     Ok(())
@@ -191,11 +219,12 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
 
     // END VALIDATION
 
-    let row: (i64, ) = sqlx::query_as("INSERT INTO games (start_datetime, end_datetime) VALUES($1, $2) RETURNING id").bind(payload.start_datetime).bind(payload.end_datetime).fetch_one(&state.pool).await.unwrap();
+    // TODO: Use a transaction
+    let row: (i32, ) = sqlx::query_as("INSERT INTO games (start_datetime, end_datetime) VALUES($1, $2) RETURNING id").bind(start_datetime).bind(end_datetime).fetch_one(&state.pool).await.unwrap();
     let game_id = row.0;
 
     for player in payload.players {
-        let player_row_result: Result<(i64, ), sqlx::Error> = sqlx::query_as("SELECT id FROM players WHERE name = $1").bind(&player.name).fetch_one(&state.pool).await;
+        let player_row_result: Result<(i32, ), sqlx::Error> = sqlx::query_as("SELECT id FROM players WHERE name = $1").bind(&player.name).fetch_one(&state.pool).await;
 
         match player_row_result {
             Ok(player_row) => {
@@ -237,7 +266,7 @@ async fn get_games(state: Arc<AppState>) -> Json<Value> {
         games: vec![]
     };
 
-    let rows: Vec<(i64, String, String, String, String, i32)> = sqlx::query_as("SELECT games.id, start_datetime, end_datetime, players.name, commander, rank FROM games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&state.pool).await.unwrap();
+    let rows: Vec<(i32, String, String, String, String, i32)> = sqlx::query_as("SELECT games.id, start_datetime, end_datetime, players.name, commander, rank FROM games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&state.pool).await.unwrap();
 
 
     let ids = rows.iter().fold(Vec::new(), |mut acc, row| {
@@ -249,7 +278,7 @@ async fn get_games(state: Arc<AppState>) -> Json<Value> {
     });
 
     for id in ids {
-        let game_rows: Vec<&(i64, String, String, String, String, i32)> = rows.iter().filter(|row| {
+        let game_rows: Vec<&(i32, String, String, String, String, i32)> = rows.iter().filter(|row| {
             row.0 == id
         }).collect();
 

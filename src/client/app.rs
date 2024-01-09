@@ -31,7 +31,7 @@ pub fn app() -> Html {
         use_effect_with((), move |_| {
             let players = players.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let fetched_players: PlayersResponse = Request::get("http://localhost:3000/players")
+                let fetched_players: PlayersResponse = Request::get("/api/players")
                     .send()
                     .await
                     .unwrap()
@@ -164,7 +164,7 @@ pub fn app() -> Html {
             log!(format!("{:?}", payload));
 
             wasm_bindgen_futures::spawn_local(async move {
-                let response: PostResponse = Request::post("http://localhost:3000/games")
+                let response: PostResponse = Request::post("/api/games")
                     .json(&payload)
                     .unwrap()
                     .send()
@@ -175,7 +175,7 @@ pub fn app() -> Html {
                     .unwrap();
 
                 if !response.success {
-                    create_message(messages.clone(), format!("Failed to POST to /games. Error was: {}", response.error.unwrap()));
+                    create_message(messages.clone(), format!("Error: {}", response.error.unwrap()));
                 }
             });
         })
