@@ -1,4 +1,3 @@
-use gloo_console::log;
 use web_sys::HtmlSelectElement;
 use wasm_bindgen::JsCast;
 use yew::prelude::*;

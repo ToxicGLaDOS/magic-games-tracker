@@ -1,12 +1,11 @@
-use chrono::TimeZone;
+use chrono::Duration;
 use gloo_net::http::Request;
 use wasm_bindgen_futures;
 use gloo_console::log;
 use web_sys::HtmlInputElement;
 use wasm_bindgen::JsCast;
-use gloo;
 use gloo_timers::callback::Timeout;
-use chrono::{Local, NaiveDateTime};
+use chrono::{Local, NaiveDateTime, DurationRound, TimeZone};
 use magic_games_tracker::messages::*;
 use yew_hooks::prelude::*;
 use crate::components::toast::*;
@@ -21,6 +20,12 @@ fn create_message(messages: UseListHandle<String>, message: String) {
     Timeout::new(5000, move || {
         messages.remove(0);
     }).forget();
+}
+
+#[derive(Clone)]
+enum GameTime {
+    Start,
+    End
 }
 
 #[function_component(App)]
@@ -90,41 +95,31 @@ pub fn app() -> Html {
     };
 
     // "%Y-%m-%dT%H:%M"
-    let start_datetime = use_state(|| Local::now());
-    let end_datetime = use_state(|| Local::now());
+    let start_datetime = use_state(|| Local::now().duration_round(Duration::minutes(1)).unwrap());
+    let end_datetime = use_state(|| Local::now().duration_round(Duration::minutes(1)).unwrap());
 
-    let start_date_oninput = {
+    let datetime_oninput = { |game_time: GameTime| {
         let start_datetime = start_datetime.clone();
-        Callback::from(move |event: InputEvent| {
-            let input_event_target = event.target().unwrap();
-            let mut current_input_text = input_event_target.unchecked_into::<HtmlInputElement>().value();
-
-            // Set end to :00 so it can be converted to a DateTime properly
-            current_input_text.push_str(":00");
-
-            let from: NaiveDateTime = current_input_text.parse().unwrap();
-            let date_time = Local.from_local_datetime(&from).unwrap();
-
-            start_datetime.set(date_time);
-        })
-    };
-
-    let messages = use_list(vec![]);
-
-    let end_date_oninput = {
         let end_datetime = end_datetime.clone();
         Callback::from(move |event: InputEvent| {
+            let game_time = game_time.clone();
             let input_event_target = event.target().unwrap();
             let mut current_input_text = input_event_target.unchecked_into::<HtmlInputElement>().value();
+
             // Set end to :00 so it can be converted to a DateTime properly
             current_input_text.push_str(":00");
 
             let from: NaiveDateTime = current_input_text.parse().unwrap();
             let date_time = Local.from_local_datetime(&from).unwrap();
 
-            end_datetime.set(date_time);
+            match game_time {
+                GameTime::Start => start_datetime.set(date_time),
+                GameTime::End => end_datetime.set(date_time)
+            }
         })
-    };
+    }};
+
+    let messages = use_list(vec![]);
 
     let add_message = {
         let messages = messages.clone();
@@ -140,6 +135,7 @@ pub fn app() -> Html {
         let selected_players = selected_players.clone();
         let selected_ranks = selected_ranks.clone();
         let start_datetime = start_datetime.clone();
+        let end_datetime = end_datetime.clone();
         let mut players: Vec<Player> = Vec::new();
         for index in 0..4 {
             if selected_players[index] != "" {
@@ -187,12 +183,12 @@ pub fn app() -> Html {
             <table>
                 <tr>
                     <td><label>{ "Start time" }</label></td>
-                    <td><input type="datetime-local" oninput={start_date_oninput} value={format!("{}", (*start_datetime).format("%Y-%m-%dT%H:%M"))} /></td>
+                    <td><input type="datetime-local" oninput={datetime_oninput(GameTime::Start)} value={format!("{}", (*start_datetime).format("%Y-%m-%dT%H:%M"))} /></td>
                 </tr>
 
                 <tr>
                     <td><label>{ "End time" }</label></td>
-                    <td><input type="datetime-local" oninput={end_date_oninput} value={format!("{}", (*end_datetime).format("%Y-%m-%dT%H:%M"))} /></td>
+                    <td><input type="datetime-local" oninput={datetime_oninput(GameTime::End)} value={format!("{}", (*end_datetime).format("%Y-%m-%dT%H:%M"))} /></td>
                 </tr>
             </table>
 

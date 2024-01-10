@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize};
+use chrono::{DateTime, Utc};
 
 #[derive(Serialize, Deserialize)]
 pub struct PlayersResponse{
@@ -25,8 +26,8 @@ pub struct GamesResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct Game {
-    pub start_datetime: String,
-    pub end_datetime: String,
+    pub start_datetime: DateTime<Utc>,
+    pub end_datetime: DateTime<Utc>,
     pub players: Vec<Player>,
 }
 

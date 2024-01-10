@@ -3,15 +3,13 @@ use axum::{
     routing::get,
     Router,
     Json,
-    http::{Response, StatusCode}
 };
 use std::env;
 use itertools::Itertools;
 use std::collections::HashMap;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
-use chrono::DateTime;
-use std::time::Duration;
+use chrono::{DateTime, Utc};
 use clap::Parser;
 use magic_games_tracker::messages::*;
 use sqlx::postgres::{PgPoolOptions, PgPool};
@@ -266,7 +264,7 @@ async fn get_games(state: Arc<AppState>) -> Json<Value> {
         games: vec![]
     };
 
-    let rows: Vec<(i32, String, String, String, String, i32)> = sqlx::query_as("SELECT games.id, start_datetime, end_datetime, players.name, commander, rank FROM games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&state.pool).await.unwrap();
+    let rows: Vec<(i32, DateTime<Utc>, DateTime<Utc>, String, String, i32)> = sqlx::query_as("SELECT games.id, start_datetime, end_datetime, players.name, commander, rank FROM games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&state.pool).await.unwrap();
 
 
     let ids = rows.iter().fold(Vec::new(), |mut acc, row| {
@@ -278,13 +276,13 @@ async fn get_games(state: Arc<AppState>) -> Json<Value> {
     });
 
     for id in ids {
-        let game_rows: Vec<&(i32, String, String, String, String, i32)> = rows.iter().filter(|row| {
+        let game_rows: Vec<&(i32, DateTime<Utc>, DateTime<Utc>, String, String, i32)> = rows.iter().filter(|row| {
             row.0 == id
         }).collect();
 
         let mut players: Vec<Player> = Vec::new();
-        let start_datetime: String = game_rows[0].1.clone();
-        let end_datetime: String = game_rows[0].2.clone();
+        let start_datetime = game_rows[0].1.clone();
+        let end_datetime = game_rows[0].2.clone();
         for game_row in game_rows {
             players.push(Player{
                 name: game_row.3.clone(),
