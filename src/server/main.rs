@@ -3,7 +3,7 @@ use axum::{
     routing::get,
     Router,
     Json,
-    http::{Response, StatusCode}, response::IntoResponse
+    http::StatusCode, response::IntoResponse
 };
 use std::env;
 use itertools::Itertools;
@@ -14,7 +14,6 @@ use chrono::{DateTime, Utc};
 use clap::Parser;
 use magic_games_tracker::messages::*;
 use sqlx::postgres::{PgPoolOptions, PgPool};
-use serde_json::{Value, json};
 use std::sync::Arc;
 
 struct AppState {
@@ -107,23 +106,23 @@ async fn main() -> Result<(), sqlx::Error> {
 
 async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>) -> impl IntoResponse {
     if payload.players.len() < 2 {
-        return (StatusCode::BAD_REQUEST, Json(json!(
+        return (StatusCode::BAD_REQUEST, Json(
                     PostResponse {
                         success: false,
                         error: Some(String::from("A game must have at least two players"))
                     }
-                )));
+                ));
     }
 
     let num_draws = payload.players.iter().filter(|player| player.rank == 0).count();
     // If any player is marked as draw
     if num_draws != 0 && num_draws != payload.players.len() {
-        return (StatusCode::BAD_REQUEST, Json(json!(
+        return (StatusCode::BAD_REQUEST, Json(
             PostResponse {
                 success: false,
                 error: Some(String::from("If one player has drawn all players must have drawn"))
             }
-        )));
+        ));
     }
 
     let mut player_counts = HashMap::<String, i32>::new();
@@ -134,11 +133,11 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
 
     for player_count in player_counts.into_values() {
         if player_count > 1 {
-            return (StatusCode::BAD_REQUEST, Json(json!(
+            return (StatusCode::BAD_REQUEST, Json(
                 PostResponse {
                     success: false,
                     error: Some(String::from("Cannot have the same player multiple times"))
-                })));
+                }));
         }
     }
 
@@ -147,11 +146,11 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
 
 
     if end_datetime <= start_datetime {
-        return (StatusCode::BAD_REQUEST, Json(json!(
+        return (StatusCode::BAD_REQUEST, Json(
             PostResponse {
                 success: false,
                 error: Some(String::from("End datetime cannot be earlier than or equal to start datetime"))
-            })));
+            }));
     }
 
     let sorted_ranks = payload.players
@@ -161,11 +160,11 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
 
     // If all ranks are 1 that should be a marked a draw
     if sorted_ranks.clone().filter(|rank| (*rank).clone() == 1).count() == payload.players.len() {
-        return (StatusCode::BAD_REQUEST, Json(json!(
+        return (StatusCode::BAD_REQUEST, Json(
             PostResponse {
                 success: false,
                 error: Some(String::from("Cannot have all players ranks as 1. To mark a draw set all players rank to Draw"))
-            })));
+            }));
 
     }
 
@@ -183,11 +182,11 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
 
         // If prev in the first tuple is not 1 that's a problem
         if enumerated_pairs[0].1.0 != 1 {
-            return (StatusCode::BAD_REQUEST, Json(json!(
+            return (StatusCode::BAD_REQUEST, Json(
                 PostResponse {
                     success: false,
                     error: Some(String::from("At least one player must come in first when there are no draws"))
-                })));
+                }));
         }
 
         // After the first prev is validated as being 1
@@ -197,22 +196,22 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
         // makes pairs the first cur is actually the second element in the list
         for (index, (prev, cur))in enumerated_pairs {
             if index != cur && prev != cur {
-                return (StatusCode::BAD_REQUEST, Json(json!(
+                return (StatusCode::BAD_REQUEST, Json(
                     PostResponse {
                         success: false,
                         error: Some(String::from(format!("Ranking is invalid player with a rank {} should have rank {} or {}", cur, index, prev)))
-                    })));
+                    }));
             }
         }
     }
 
     for player in payload.players.iter() {
         if player.commander == "" {
-            return (StatusCode::BAD_REQUEST, Json(json!(
+            return (StatusCode::BAD_REQUEST, Json(
                 PostResponse {
                     success: false,
                     error: Some(String::from("Player is missing a commander"))
-                })));
+                }));
         }
     }
 
@@ -231,36 +230,39 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
                 sqlx::query("INSERT INTO games_players (game_id, player_id, commander, rank) VALUES($1, $2, $3, $4)").bind(game_id).bind(player_id).bind(player.commander).bind(player.rank as i32).execute(&state.pool).await.unwrap();
             },
             Err(error) => {
-                return (StatusCode::BAD_REQUEST, Json(json!({"error": error.to_string(), "success": false})));
+                return (StatusCode::BAD_REQUEST, Json(PostResponse{ 
+                    success: false,
+                    error: Some(error.to_string())
+                }));
             }
         }
     }
 
-    (StatusCode::BAD_REQUEST, Json(json!({ "success": true })))
+    (StatusCode::OK, Json(PostResponse { success:true, error: None }))
 }
 
 async fn post_player(Json(payload): Json<PlayerPayload>, state: Arc<AppState>) -> impl IntoResponse {
 
     match sqlx::query("INSERT INTO players (name) VALUES($1)").bind(payload.name).execute(&state.pool).await {
-        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Ok(_) => (StatusCode::OK, Json(PostResponse { success: true, error: None})),
         Err(error) if error.as_database_error().unwrap().code().unwrap() == "2067" => {
-            (StatusCode::BAD_REQUEST, Json(json!(
+            (StatusCode::BAD_REQUEST, Json(
                     PostResponse{
                         success: false,
                         error: Some(String::from("Player already exists"))
                     }
-                    )))
+                    ))
         }
-        Err(error) => (StatusCode::BAD_REQUEST, Json(json!(
+        Err(error) => (StatusCode::BAD_REQUEST, Json(
                     PostResponse {
                         success: false,
                         error:  Some(error.to_string())
                     }
-                )))
+                ))
     }
 }
 
-async fn get_games(state: Arc<AppState>) -> Json<Value> {
+async fn get_games(state: Arc<AppState>) -> Json<GamesResponse> {
     let mut games_response = GamesResponse{
         games: vec![]
     };
@@ -302,10 +304,10 @@ async fn get_games(state: Arc<AppState>) -> Json<Value> {
     }
 
 
-    Json(json!(games_response))
+    Json(games_response)
 }
 
-async fn get_players(state: Arc<AppState>) -> Json<Value> {
+async fn get_players(state: Arc<AppState>) -> Json<PlayersResponse> {
     let rows: Vec<(String,)> = sqlx::query_as("SELECT name FROM players").fetch_all(&state.pool).await.unwrap();
 
     // Flatten rows
@@ -319,5 +321,5 @@ async fn get_players(state: Arc<AppState>) -> Json<Value> {
     };
 
 
-    Json(json!(players_response))
+    Json(players_response)
 }
