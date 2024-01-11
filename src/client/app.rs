@@ -172,6 +172,8 @@ pub fn app() -> Html {
 
                 if !response.success {
                     create_message(messages.clone(), format!("Error: {}", response.error.unwrap()));
+                } else {
+                    create_message(messages.clone(), String::from("Game submitted successfully!"));
                 }
             });
         })
