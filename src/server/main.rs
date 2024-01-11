@@ -245,7 +245,7 @@ async fn post_player(Json(payload): Json<PlayerPayload>, state: Arc<AppState>) -
 
     match sqlx::query("INSERT INTO players (name) VALUES($1)").bind(payload.name).execute(&state.pool).await {
         Ok(_) => (StatusCode::OK, Json(PostResponse { success: true, error: None})),
-        Err(error) if error.as_database_error().unwrap().code().unwrap() == "2067" => {
+        Err(error) if error.as_database_error().unwrap().code().unwrap() == "23505" => {
             (StatusCode::BAD_REQUEST, Json(
                     PostResponse{
                         success: false,
