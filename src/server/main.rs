@@ -114,17 +114,6 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
                 ));
     }
 
-    let num_draws = payload.players.iter().filter(|player| player.rank == 0).count();
-    // If any player is marked as draw
-    if num_draws != 0 && num_draws != payload.players.len() {
-        return (StatusCode::BAD_REQUEST, Json(
-            PostResponse {
-                success: false,
-                error: Some(String::from("If one player has drawn all players must have drawn"))
-            }
-        ));
-    }
-
     let mut player_counts = HashMap::<String, i32>::new();
 
     for player in payload.players.iter() {
@@ -158,50 +147,50 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
         .map(|player| player.rank)
         .sorted();
 
-    // If all ranks are 1 that should be a marked a draw
-    if sorted_ranks.clone().filter(|rank| (*rank).clone() == 1).count() == payload.players.len() {
-        return (StatusCode::BAD_REQUEST, Json(
-            PostResponse {
-                success: false,
-                error: Some(String::from("Cannot have all players ranks as 1. To mark a draw set all players rank to Draw"))
-            }));
-
-    }
-
-    if num_draws == 0 {
-        // The way this works is by taking the sorted ranks then ensuring that the first
-        // rank is 1. After that we ensure the second rank is either equal to the
-        // previous or equal to 2, then we check that third rank in order is equal to
-        // 3 or the previous rank and so on.
-
-        let enumerated_pairs = sorted_ranks
-            .tuple_windows()
-            .enumerate()
-            .map(|(index, (prev, rank))| (index + 2, (prev, rank)))
-            .collect::<Vec<(usize, (usize, usize))>>();
-
-        // If prev in the first tuple is not 1 that's a problem
-        if enumerated_pairs[0].1.0 != 1 {
+    // If any ranks are outside the bounds of 1-<number of players>
+    // then the ranking is invalid
+    for player in payload.players.iter() {
+        if player.rank < 1 || player.rank > payload.players.len() {
             return (StatusCode::BAD_REQUEST, Json(
                 PostResponse {
                     success: false,
-                    error: Some(String::from("At least one player must come in first when there are no draws"))
+                    error: Some(format!("Player {} has invalid value for rank", player.name))
                 }));
         }
+    }
 
-        // After the first prev is validated as being 1
-        // we can compare cur to prev and the index of this pair
-        // The only gotcha is that we have to start index at 2
-        // because rankings start at 1 and due to the way tuple_windows
-        // makes pairs the first cur is actually the second element in the list
-        for (index, (prev, cur))in enumerated_pairs {
-            if index != cur && prev != cur {
-                return (StatusCode::BAD_REQUEST, Json(
-                    PostResponse {
-                        success: false,
-                        error: Some(String::from(format!("Ranking is invalid player with a rank {} should have rank {} or {}", cur, index, prev)))
-                    }));
-            }
+    // The way we validate ranks is by ensuring that the first in sorted_ranks
+    // rank is 1. After that we ensure the second rank is either equal to the
+    // previous or equal to 2, then we check that third rank in order is equal to
+    // 3 or the previous rank and so on.
+
+    let enumerated_pairs = sorted_ranks
+        .tuple_windows()
+        .enumerate()
+        .map(|(index, (prev, rank))| (index + 2, (prev, rank)))
+        .collect::<Vec<(usize, (usize, usize))>>();
+
+    // If prev in the first tuple is not 1 that's a problem
+    if enumerated_pairs[0].1.0 != 1 {
+        return (StatusCode::BAD_REQUEST, Json(
+            PostResponse {
+                success: false,
+                error: Some(String::from("At least one player must come in first"))
+            }));
+    }
+
+    // After the first prev is validated as being 1
+    // we can compare cur to prev and the index of this pair
+    // The only gotcha is that we have to start index at 2
+    // because rankings start at 1 and due to the way tuple_windows
+    // makes pairs the first cur is actually the second element in the list
+    for (index, (prev, cur)) in enumerated_pairs {
+        if index != cur && prev != cur {
+            return (StatusCode::BAD_REQUEST, Json(
+                PostResponse {
+                    success: false,
+                    error: Some(String::from(format!("Ranking is invalid player with a rank {} should have rank {} or {}", cur, index, prev)))
+                }));
         }
     }
 

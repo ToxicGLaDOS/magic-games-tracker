@@ -24,7 +24,7 @@ pub fn rank_select(Props{ num_players, select_callback }: &Props) -> Html {
 
     html!{
         <select onchange={on_change.clone()} class="rank-select">
-            <option value={0} selected=true>{"Draw"}</option>
+            <option value={0} selected=true></option>
             {
                 (0..*num_players).map(|x| {
                     html! {
