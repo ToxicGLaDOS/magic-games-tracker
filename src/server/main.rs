@@ -206,17 +206,18 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
 
     // END VALIDATION
 
-    // TODO: Use a transaction
-    let row: (i32, ) = sqlx::query_as("INSERT INTO games (start_datetime, end_datetime) VALUES($1, $2) RETURNING id").bind(start_datetime).bind(end_datetime).fetch_one(&state.pool).await.unwrap();
+    let mut tx = state.pool.begin().await.unwrap();
+
+    let row: (i32, ) = sqlx::query_as("INSERT INTO games (start_datetime, end_datetime) VALUES($1, $2) RETURNING id").bind(start_datetime).bind(end_datetime).fetch_one(&mut *tx).await.unwrap();
     let game_id = row.0;
 
     for player in payload.players {
-        let player_row_result: Result<(i32, ), sqlx::Error> = sqlx::query_as("SELECT id FROM players WHERE name = $1").bind(&player.name).fetch_one(&state.pool).await;
+        let player_row_result: Result<(i32, ), sqlx::Error> = sqlx::query_as("SELECT id FROM players WHERE name = $1").bind(&player.name).fetch_one(&mut *tx).await;
 
         match player_row_result {
             Ok(player_row) => {
                 let player_id = player_row.0;
-                sqlx::query("INSERT INTO games_players (game_id, player_id, commander, rank) VALUES($1, $2, $3, $4)").bind(game_id).bind(player_id).bind(player.commander).bind(player.rank as i32).execute(&state.pool).await.unwrap();
+                sqlx::query("INSERT INTO games_players (game_id, player_id, commander, rank) VALUES($1, $2, $3, $4)").bind(game_id).bind(player_id).bind(player.commander).bind(player.rank as i32).execute(&mut *tx).await.unwrap();
             },
             Err(error) => {
                 return (StatusCode::BAD_REQUEST, Json(PostResponse{ 
@@ -226,6 +227,7 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
             }
         }
     }
+    tx.commit().await.unwrap();
 
     (StatusCode::OK, Json(PostResponse { success:true, error: None }))
 }
