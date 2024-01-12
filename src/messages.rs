@@ -7,6 +7,16 @@ pub struct PlayersResponse{
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct CommandersResponse{
+    pub commanders: Vec<String>,
+}
+
+#[derive(Deserialize)]
+pub struct BulkDataResponse {
+    pub download_uri: String
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct PostResponse {
     pub success: bool,
     pub error: Option<String>

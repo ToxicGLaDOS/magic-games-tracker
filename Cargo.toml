@@ -29,6 +29,7 @@ tower-http = { version="0.5.0", features=["cors", "fs"] }
 tokio = { version = "1.35.1", features = ["full"] }
 sqlx = { version = "0.7", features = [ "runtime-tokio", "tls-rustls", "chrono", "postgres" ] }
 serde_json = "1.0.109"
+reqwest = { version = "0.11.23", features = ["json", "blocking"] }
 
 [[bin]]
 name = "server"

@@ -22,6 +22,6 @@ pub fn commander_input(CommanderInputProps{ onchange }: &CommanderInputProps) ->
 
     );
     html!{
-        <input class="commander-input" onchange={handle_onchange}/>
+        <input list="commanders" class="commander-input" onchange={handle_onchange}/>
     }
 }

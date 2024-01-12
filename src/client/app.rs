@@ -30,6 +30,7 @@ enum GameTime {
 
 #[function_component(App)]
 pub fn app() -> Html {
+
     let players = use_state(|| Vec::new());
     {
         let players = players.clone();
@@ -179,7 +180,24 @@ pub fn app() -> Html {
         })
     };
 
+    let commanders = use_state(|| Vec::new());
 
+    {
+        let commanders = commanders.clone();
+        use_effect_with((), move |_| {
+            let commanders = commanders.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let fetched_commanders: CommandersResponse = Request::get("/api/commanders")
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+                commanders.set(fetched_commanders.commanders);
+            });
+        });
+    }
     html! {
         <main>
             <table>
@@ -194,6 +212,13 @@ pub fn app() -> Html {
                 </tr>
             </table>
 
+			<datalist id="commanders">
+				{
+					commanders.iter().map(|commander: &String| { html! {
+					<option value={(*commander).clone()}/>
+                    }}).collect::<Html>()
+				}
+			</datalist>
             <table>
                 <tr>
                     <td><label>{ "Players" }</label></td>

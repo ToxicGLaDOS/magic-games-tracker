@@ -5,20 +5,21 @@ use axum::{
     Json,
     http::StatusCode, response::IntoResponse
 };
-use std::env;
+use reqwest;
+use reqwest::Method;
+use std::{env, thread, fs, fs::File, path::Path, io::Write, time::Duration, sync::Arc, collections::HashMap};
 use itertools::Itertools;
-use std::collections::HashMap;
-use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
+use tower_http::{cors::CorsLayer, services::ServeDir};
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use magic_games_tracker::messages::*;
 use sqlx::postgres::{PgPoolOptions, PgPool};
-use std::sync::Arc;
+use serde::Deserialize;
 
 struct AppState {
     pool: PgPool
 }
+
 #[derive(Parser, Debug)]
 struct CliOptions {
     /// set the listen addr
@@ -34,8 +35,127 @@ struct CliOptions {
     static_dir: String,
 }
 
+#[derive(Deserialize)]
+struct ScryfallLegalities {
+    commander: String
+}
+
+#[derive(Deserialize)]
+struct ScryfallPart {
+    component: String,
+    name: String
+}
+
+#[derive(Deserialize)]
+struct ScryfallCardFace {
+    type_line: Option<String>,
+    name: String
+}
+
+#[derive(Deserialize)]
+struct ScryfallCard {
+    type_line: Option<String>,
+    name: String,
+    legalities: ScryfallLegalities,
+    games: Vec<String>,
+    oracle_text: Option<String>,
+    all_parts: Option<Vec<ScryfallPart>>,
+    card_faces: Option<Vec<ScryfallCardFace>>
+}
+
+fn generate_commanders() {
+    println!("Getting bulk data URI");
+    let bulk_data_response: BulkDataResponse = reqwest::blocking::get("https://api.scryfall.com/bulk-data/default-cards")
+        .unwrap()
+        .json()
+        .unwrap();
+
+    println!("Getting bulk data from {}", bulk_data_response.download_uri);
+    let cards: Vec<ScryfallCard> = reqwest::blocking::Client::new()
+        .request(Method::GET, bulk_data_response.download_uri)
+        .timeout(Duration::from_secs(60 * 20))
+        .send()
+        .unwrap()
+        .json()
+        .unwrap();
+
+    let mut commanders: Vec<String> = Vec::new();
+
+    for card in cards {
+        let mut type_line = card.type_line;
+        let mut name = card.name;
+
+        if card.legalities.commander != "legal" {
+            continue
+        }
+
+        if !card.games.contains(&String::from("paper")) {
+            continue
+        }
+
+        // Skip stuff like Brisela
+        if let Some(parts) = card.all_parts {
+            let meld_result_parts: Vec<&ScryfallPart> = parts.iter().filter(|part| part.component == "meld_result").collect();
+            if !meld_result_parts.is_empty() {
+                if meld_result_parts[0].name == *name {
+                    continue
+                }
+            }
+        }
+
+        if let Some(faces) = card.card_faces {
+            if let Some(inner_type_line) = &faces[0].type_line {
+                type_line = Some(inner_type_line.clone());
+            }
+            name = faces[0].name.clone();
+        }
+
+
+        if let Some(type_line) = type_line {
+            if commanders.contains(&name) {
+                continue
+            }
+            if type_line.contains("Creature") && type_line.contains("Legendary") {
+                commanders.push(name);
+            }
+            else if type_line.contains("Background") {
+                commanders.push(name);
+            }
+            else if name == "Grist, the Hunger Tide" {
+                commanders.push(name);
+            }
+            else if let Some(oracle_text) = card.oracle_text {
+                if oracle_text.contains("can be your commander") {
+                    commanders.push(name);
+                }
+            }
+        }
+    }
+
+    commanders.sort();
+
+    let mut file = File::create("commanders.json").unwrap();
+    let s = serde_json::to_string(&commanders).unwrap();
+    write!(file, "{}", s).unwrap();
+
+    println!("Loaded {} commanders", commanders.len());
+}
+
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
+    let _commander_thread = thread::spawn(|| {
+        // This is just to prevent downloading every time
+        // the program runs during development, but still
+        // allows a fresh server to download immediately
+        if !Path::new("commanders.json").exists() {
+            generate_commanders();
+        }
+        loop {
+            thread::sleep(Duration::from_secs(60 * 60 * 24));
+            generate_commanders();
+        }
+    });
+
     let opts = CliOptions::parse();
 
     // Defaults values correspond to development postgres, not production
@@ -91,6 +211,7 @@ async fn main() -> Result<(), sqlx::Error> {
                         let shared_state = Arc::clone(&shared_state);
                         move |body| post_player(body, shared_state)
                     }))
+        .route("/api/commanders", get(get_commanders))
         .layer(CorsLayer::permissive())
         .fallback_service(
             ServeDir::new(opts.static_dir)
@@ -217,6 +338,7 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
         match player_row_result {
             Ok(player_row) => {
                 let player_id = player_row.0;
+                // TODO: Handle potential error instead of unwrapping
                 sqlx::query("INSERT INTO games_players (game_id, player_id, commander, rank) VALUES($1, $2, $3, $4)").bind(game_id).bind(player_id).bind(player.commander).bind(player.rank as i32).execute(&mut *tx).await.unwrap();
             },
             Err(error) => {
@@ -313,4 +435,13 @@ async fn get_players(state: Arc<AppState>) -> Json<PlayersResponse> {
 
 
     Json(players_response)
+}
+
+async fn get_commanders() -> Json<CommandersResponse> {
+    let json_text = fs::read_to_string("commanders.json").unwrap();
+    let cards: Vec<String> = serde_json::from_str(&json_text).expect("JSON was not well-formatted");
+
+    Json(CommandersResponse {
+        commanders: cards
+    })
 }
