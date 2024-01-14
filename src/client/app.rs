@@ -226,22 +226,22 @@ pub fn app() -> Html {
                     <td><label>{ "Rank" }</label></td>
                 </tr>
                 <tr>
-                    <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(0)}/></td>
+                    <td><PlayersSelect players={(*players).clone()} select_callback={on_player_select.clone()(0)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(0)}/></td>
                     <td><RankSelect select_callback={select_rank_callback.clone()(0)} num_players={num_selected_players.clone()}/></td>
                 </tr>
                 <tr>
-                    <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(1)}/></td>
+                    <td><PlayersSelect players={(*players).clone()} select_callback={on_player_select.clone()(1)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(1)}/></td>
                     <td><RankSelect select_callback={select_rank_callback.clone()(1)} num_players={num_selected_players.clone()}/></td>
                 </tr>
                 <tr>
-                    <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(2)}/></td>
+                    <td><PlayersSelect players={(*players).clone()} select_callback={on_player_select.clone()(2)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(2)}/></td>
                     <td><RankSelect select_callback={select_rank_callback.clone()(2)} num_players={num_selected_players.clone()}/></td>
                 </tr>
                 <tr>
-                    <td><PlayersSelect players={(*players).clone()} on_click={on_player_select.clone()(3)}/></td>
+                    <td><PlayersSelect players={(*players).clone()} select_callback={on_player_select.clone()(3)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(3)}/></td>
                     <td><RankSelect select_callback={select_rank_callback.clone()(3)} num_players={num_selected_players.clone()}/></td>
                 </tr>

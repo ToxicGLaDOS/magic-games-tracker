@@ -1,31 +1,35 @@
+use web_sys::HtmlSelectElement;
+use wasm_bindgen::JsCast;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct PlayersSelectProps {
     pub players: Vec<String>,
-    pub on_click: Callback<String>
+    pub select_callback: Callback<String>
 }
 
 #[function_component(PlayersSelect)]
-pub fn players_select(PlayersSelectProps { players, on_click }: &PlayersSelectProps) -> Html {
+pub fn players_select(PlayersSelectProps { players, select_callback }: &PlayersSelectProps) -> Html {
 
-    let on_click = move |player: String| {
-        let on_click = on_click.clone();
-        Callback::from(move |_| {
-            let player = player.clone();
-            on_click.emit(player);
+    let on_change = {
+        let select_callback = select_callback.clone();
+        Callback::from(move |event: Event| {
+            let event_target = event.target().unwrap();
+            let select_element = event_target.unchecked_into::<HtmlSelectElement>();
+
+            select_callback.emit(select_element.value());
         })
     };
 
     html!{
-        <select class="player-select">
+        <select onchange={on_change.clone()} class="player-select">
 
-        <option onclick={on_click("".to_string())} value=""></option>
+        <option value=""></option>
         {
             players.iter().map(|player| {
 
                 html!{
-                    <option key={player.clone()} onclick={on_click(player.clone())} value={player.clone()}>{player.clone()}</option>
+                    <option key={player.clone()} value={player.clone()}>{player.clone()}</option>
                 }
             }
             ).collect::<Html>()
