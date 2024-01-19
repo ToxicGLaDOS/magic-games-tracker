@@ -20,7 +20,6 @@ gloo = "0.11.0"
 chrono = { version="0.4.31", features = ["serde"] }
 yew-hooks = "0.3.0"
 gloo-timers = "0.3.0"
-itertools = "0.12.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 axum = "0.7.3"
@@ -29,7 +28,8 @@ tower-http = { version="0.5.0", features=["cors", "fs"] }
 tokio = { version = "1.35.1", features = ["full"] }
 sqlx = { version = "0.7", features = [ "runtime-tokio", "tls-rustls", "chrono", "postgres" ] }
 serde_json = "1.0.109"
-reqwest = { version = "0.11.23", features = ["json", "blocking"] }
+reqwest = { version = "0.11.23", features = ["json", "blocking", "rustls-tls"], default-features = false }
+itertools = "0.12.0"
 
 [[bin]]
 name = "server"

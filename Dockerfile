@@ -2,8 +2,9 @@ FROM rust as builder
 
 ADD . /magic-games-tracker/
 
-RUN cd magic-games-tracker && \
-  echo [target.armv7-unknown-linux-gnueabihf] >> /usr/local/cargo/config.toml && \
+WORKDIR /magic-games-tracker
+
+RUN echo [target.armv7-unknown-linux-gnueabihf] >> /usr/local/cargo/config.toml && \
   echo linker = \"arm-linux-gnueabihf-gcc\" >> /usr/local/cargo/config.toml && \
   apt-get update && \
   apt-get install -y gcc-arm-linux-gnueabihf && \
