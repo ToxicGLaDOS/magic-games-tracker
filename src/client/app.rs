@@ -95,6 +95,17 @@ pub fn app() -> Html {
         })
     };
 
+    let partner_inputs = use_state(|| ["".to_string(), "".to_string(), "".to_string(), "".to_string()]);
+
+    let on_partnet_input = |index: usize| {
+        let partner_inputs = partner_inputs.clone();
+        Callback::from(move |commander: String| {
+            let mut partner_inputs_copy = (*partner_inputs).clone();
+            partner_inputs_copy[index] = commander;
+            partner_inputs.set(partner_inputs_copy);
+        })
+    };
+
     // "%Y-%m-%dT%H:%M"
     let start_datetime = use_state(|| Local::now().duration_round(Duration::minutes(1)).unwrap());
     let end_datetime = use_state(|| Local::now().duration_round(Duration::minutes(1)).unwrap());
@@ -140,9 +151,18 @@ pub fn app() -> Html {
         let mut players: Vec<Player> = Vec::new();
         for index in 0..4 {
             if selected_players[index] != "" {
+                let mut commanders = Vec::new();
+                if commander_inputs[index] != "" {
+                    commanders.push(commander_inputs[index].clone());
+                }
+
+                if partner_inputs[index] != "" {
+                    commanders.push(partner_inputs[index].clone());
+                }
+
                 players.push(
                     Player{
-                        commander: commander_inputs[index].clone(),
+                        commanders,
                         name: selected_players[index].clone(),
                         rank: selected_ranks[index].clone()
                 });
@@ -223,26 +243,31 @@ pub fn app() -> Html {
                 <tr>
                     <td><label>{ "Players" }</label></td>
                     <td><label>{ "Commanders" }</label></td>
+                    <td><label>{ "Partner" }</label></td>
                     <td><label>{ "Rank" }</label></td>
                 </tr>
                 <tr>
                     <td><PlayersSelect players={(*players).clone()} select_callback={on_player_select.clone()(0)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(0)}/></td>
+                    <td><CommanderInput onchange={on_partnet_input.clone()(0)}/></td>
                     <td><RankSelect select_callback={select_rank_callback.clone()(0)} num_players={num_selected_players.clone()}/></td>
                 </tr>
                 <tr>
                     <td><PlayersSelect players={(*players).clone()} select_callback={on_player_select.clone()(1)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(1)}/></td>
+                    <td><CommanderInput onchange={on_partnet_input.clone()(1)}/></td>
                     <td><RankSelect select_callback={select_rank_callback.clone()(1)} num_players={num_selected_players.clone()}/></td>
                 </tr>
                 <tr>
                     <td><PlayersSelect players={(*players).clone()} select_callback={on_player_select.clone()(2)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(2)}/></td>
+                    <td><CommanderInput onchange={on_partnet_input.clone()(2)}/></td>
                     <td><RankSelect select_callback={select_rank_callback.clone()(2)} num_players={num_selected_players.clone()}/></td>
                 </tr>
                 <tr>
                     <td><PlayersSelect players={(*players).clone()} select_callback={on_player_select.clone()(3)}/></td>
                     <td><CommanderInput onchange={on_commander_input.clone()(3)}/></td>
+                    <td><CommanderInput onchange={on_partnet_input.clone()(3)}/></td>
                     <td><RankSelect select_callback={select_rank_callback.clone()(3)} num_players={num_selected_players.clone()}/></td>
                 </tr>
             </table>

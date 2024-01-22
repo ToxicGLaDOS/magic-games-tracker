@@ -186,10 +186,16 @@ async fn main() -> Result<(), sqlx::Error> {
             id SERIAL PRIMARY KEY,
             game_id INTEGER NOT NULL,
             player_id INTEGER NOT NULL,
-            commander TEXT NOT NULL,
             rank INTEGER NOT NULL,
             FOREIGN KEY (game_id) REFERENCES games(id),
             FOREIGN KEY (player_id) REFERENCES players(id))").execute(&pool).await?;
+
+    sqlx::query("CREATE TABLE IF NOT EXISTS commanders (
+            id SERIAL PRIMARY KEY,
+            games_players_id INTEGER NOT NULL,
+            commander TEXT NOT NULL,
+            FOREIGN KEY (games_players_id) REFERENCES games_players(id)
+            )").execute(&pool).await?;
 
     let shared_state = Arc::new(AppState { pool });
 
@@ -316,12 +322,21 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
     }
 
     for player in payload.players.iter() {
-        if player.commander == "" {
+        if player.commanders.is_empty() {
             return (StatusCode::BAD_REQUEST, Json(
-                PostResponse {
-                    success: false,
-                    error: Some(String::from("Player is missing a commander"))
-                }));
+                    PostResponse {
+                        success: false,
+                        error: Some(format!("Player \"{}\" has no commanders", player.name))
+                    }));
+        }
+        for commander in player.commanders.clone() {
+            if commander == "" {
+                return (StatusCode::BAD_REQUEST, Json(
+                    PostResponse {
+                        success: false,
+                        error: Some(format!("Player \"{}\" has an empty string as a commander", player.name))
+                    }));
+            }
         }
     }
 
@@ -339,7 +354,11 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
             Ok(player_row) => {
                 let player_id = player_row.0;
                 // TODO: Handle potential error instead of unwrapping
-                sqlx::query("INSERT INTO games_players (game_id, player_id, commander, rank) VALUES($1, $2, $3, $4)").bind(game_id).bind(player_id).bind(player.commander).bind(player.rank as i32).execute(&mut *tx).await.unwrap();
+                let row: (i32,) = sqlx::query_as("INSERT INTO games_players (game_id, player_id, rank) VALUES($1, $2, $3) RETURNING id").bind(game_id).bind(player_id).bind(player.rank as i32).fetch_one(&mut *tx).await.unwrap();
+                let games_players_id = row.0;
+                for commander in player.commanders {
+                    sqlx::query("INSERT INTO commanders (games_players_id, commander) VALUES($1, $2)").bind(games_players_id).bind(commander).execute(&mut *tx).await.unwrap();
+                }
             },
             Err(error) => {
                 return (StatusCode::BAD_REQUEST, Json(PostResponse{ 
@@ -380,10 +399,11 @@ async fn get_games(state: Arc<AppState>) -> Json<GamesResponse> {
         games: vec![]
     };
 
-    let rows: Vec<(i32, DateTime<Utc>, DateTime<Utc>, String, String, i32)> = sqlx::query_as("SELECT games.id, start_datetime, end_datetime, players.name, commander, rank FROM games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&state.pool).await.unwrap();
+    let rows: Vec<(i32, i32, DateTime<Utc>, DateTime<Utc>, String, i32)> = sqlx::query_as("SELECT games.id, games_players.id, start_datetime, end_datetime, players.name, rank FROM games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&state.pool).await.unwrap();
 
+    let commander_rows: Vec<(i32, String)> = sqlx::query_as("SELECT games_players.id, commander FROM commanders INNER JOIN games_players ON games_players_id = games_players.id").fetch_all(&state.pool).await.unwrap();
 
-    let ids = rows.iter().fold(Vec::new(), |mut acc, row| {
+    let unique_game_ids = rows.iter().fold(Vec::new(), |mut acc, row| {
         if !acc.contains(&row.0) {
             acc.push(row.0);
         }
@@ -391,18 +411,32 @@ async fn get_games(state: Arc<AppState>) -> Json<GamesResponse> {
         acc
     });
 
-    for id in ids {
-        let game_rows: Vec<&(i32, DateTime<Utc>, DateTime<Utc>, String, String, i32)> = rows.iter().filter(|row| {
+    let games_players_id_to_commanders = commander_rows.iter().fold(HashMap::new(), |mut acc: HashMap<i32, Vec<String>>, row| {
+        match acc.get_mut(&row.0) {
+            Some(commanders) => {
+                commanders.push(row.1.clone());
+            },
+            None => {
+                acc.insert(row.0, vec![row.1.clone()]);
+            }
+        }
+
+        acc
+    });
+
+    for id in unique_game_ids {
+        let game_rows: Vec<&(i32, i32, DateTime<Utc>, DateTime<Utc>, String, i32)> = rows.iter().filter(|row| {
             row.0 == id
         }).collect();
 
         let mut players: Vec<Player> = Vec::new();
-        let start_datetime = game_rows[0].1.clone();
-        let end_datetime = game_rows[0].2.clone();
+        let start_datetime = game_rows[0].2.clone();
+        let end_datetime = game_rows[0].3.clone();
+
         for game_row in game_rows {
             players.push(Player{
-                name: game_row.3.clone(),
-                commander: game_row.4.clone(),
+                name: game_row.4.clone(),
+                commanders: games_players_id_to_commanders.get(&game_row.1).unwrap().clone(),
                 rank: game_row.5 as usize
             })
         }

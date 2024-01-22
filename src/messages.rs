@@ -25,7 +25,7 @@ pub struct PostResponse {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Player {
     pub name: String,
-    pub commander: String,
+    pub commanders: Vec<String>,
     pub rank: usize
 }
 
