@@ -6,7 +6,7 @@ use web_sys::HtmlInputElement;
 use wasm_bindgen::JsCast;
 use gloo_timers::callback::Timeout;
 use chrono::{Local, NaiveDateTime, DurationRound, TimeZone};
-use magic_games_tracker::messages::*;
+use ormos::messages::*;
 use yew_hooks::prelude::*;
 use crate::components::toast::*;
 use crate::components::player_select::*;

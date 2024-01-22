@@ -2,7 +2,7 @@ use gloo_net::http::Request;
 use serde::{Serialize, Deserialize};
 use web_sys::HtmlInputElement;
 use wasm_bindgen::JsCast;
-use magic_games_tracker::messages::PostResponse;
+use ormos::messages::PostResponse;
 use yew::prelude::*;
 
 #[derive(Serialize, Deserialize)]

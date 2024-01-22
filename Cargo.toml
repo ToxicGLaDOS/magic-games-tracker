@@ -1,5 +1,5 @@
 [package]
-name = "magic-games-tracker"
+name = "ormos"
 version = "0.1.0"
 edition = "2021"
 

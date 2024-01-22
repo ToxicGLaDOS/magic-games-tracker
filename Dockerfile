@@ -1,8 +1,8 @@
 FROM rust as builder
 
-ADD . /magic-games-tracker/
+ADD . /ormos/
 
-WORKDIR /magic-games-tracker
+WORKDIR /ormos
 
 RUN echo [target.armv7-unknown-linux-gnueabihf] >> /usr/local/cargo/config.toml && \
   echo linker = \"arm-linux-gnueabihf-gcc\" >> /usr/local/cargo/config.toml && \
@@ -16,7 +16,7 @@ RUN echo [target.armv7-unknown-linux-gnueabihf] >> /usr/local/cargo/config.toml 
 
 FROM arm32v7/ubuntu
 
-COPY --from=builder /magic-games-tracker/target /magic-games-tracker
-COPY --from=builder /magic-games-tracker/dist /magic-games-tracker/dist
+COPY --from=builder /ormos/target /ormos
+COPY --from=builder /ormos/dist /ormos/dist
 
-CMD ["/magic-games-tracker/armv7-unknown-linux-gnueabihf/release/server", "--port", "80", "--addr", "0.0.0.0", "--static-dir", "/magic-games-tracker/dist/"]
+CMD ["/ormos/armv7-unknown-linux-gnueabihf/release/server", "--port", "80", "--addr", "0.0.0.0", "--static-dir", "/ormos/dist/"]

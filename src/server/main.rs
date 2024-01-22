@@ -12,7 +12,7 @@ use itertools::Itertools;
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use chrono::{DateTime, Utc};
 use clap::Parser;
-use magic_games_tracker::messages::*;
+use ormos::messages::*;
 use sqlx::postgres::{PgPoolOptions, PgPool};
 use serde::Deserialize;
 
@@ -163,7 +163,7 @@ async fn main() -> Result<(), sqlx::Error> {
     let pg_password = env::var("POSTGRES_PASSWORD").unwrap_or(String::from("password"));
     let pg_host = env::var("POSTGRES_HOST").unwrap_or(String::from("localhost"));
     let pg_port = env::var("POSTGRES_PORT").unwrap_or(String::from("55432"));
-    let pg_database = env::var("POSTGRES_DB").unwrap_or(String::from("magic-games-tracker"));
+    let pg_database = env::var("POSTGRES_DB").unwrap_or(String::from("ormos"));
 
     let connection_string = format!("postgres://{}:{}@{}:{}/{}", pg_user, pg_password, pg_host, pg_port, pg_database);
 
