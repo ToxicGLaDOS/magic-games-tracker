@@ -1,3 +1,4 @@
+use axum::Extension;
 use tokio;
 use axum::{
     routing::get,
@@ -7,7 +8,7 @@ use axum::{
 };
 use reqwest;
 use reqwest::Method;
-use std::{env, thread, fs, fs::File, path::Path, io::Write, time::Duration, sync::Arc, collections::HashMap};
+use std::{env, thread, fs, fs::File, path::Path, io::Write, time::Duration, collections::HashMap};
 use itertools::Itertools;
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use chrono::{DateTime, Utc};
@@ -15,10 +16,6 @@ use clap::Parser;
 use ormos::messages::*;
 use sqlx::postgres::{PgPoolOptions, PgPool};
 use serde::Deserialize;
-
-struct AppState {
-    pool: PgPool
-}
 
 #[derive(Parser, Debug)]
 struct CliOptions {
@@ -197,32 +194,20 @@ async fn main() -> Result<(), sqlx::Error> {
             FOREIGN KEY (games_players_id) REFERENCES games_players(id)
             )").execute(&pool).await?;
 
-    let shared_state = Arc::new(AppState { pool });
-
     // build our application with a single route
     let app = Router::new()
-        .route("/api/games", get({
-                    let shared_state = Arc::clone(&shared_state);
-                    || get_games(shared_state)
-                })
-               .post({
-                        let shared_state = Arc::clone(&shared_state);
-                        move |body| post_games(body, shared_state)
-                    }))
-        .route("/api/players", get({
-                    let shared_state = Arc::clone(&shared_state);
-                    || get_players(shared_state)
-                })
-               .post({
-                        let shared_state = Arc::clone(&shared_state);
-                        move |body| post_player(body, shared_state)
-                    }))
+        .route("/api/games", get(get_games)
+               .post(post_games)
+               )
+        .route("/api/players", get(get_players)
+               .post(post_player)
+               )
         .route("/api/commanders", get(get_commanders))
+        .layer(Extension(pool))
         .layer(CorsLayer::permissive())
         .fallback_service(
             ServeDir::new(opts.static_dir)
-            )
-        .with_state(shared_state);
+            );
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", opts.addr, opts.port)).await.unwrap();
@@ -231,7 +216,7 @@ async fn main() -> Result<(), sqlx::Error> {
     Ok(())
 }
 
-async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>) -> impl IntoResponse {
+async fn post_games(Extension(pool): Extension<PgPool>, Json(payload): Json<CreateGamePayload>) -> impl IntoResponse {
     if payload.players.len() < 2 {
         return (StatusCode::BAD_REQUEST, Json(
                     PostResponse {
@@ -342,7 +327,7 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
 
     // END VALIDATION
 
-    let mut tx = state.pool.begin().await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
 
     let row: (i32, ) = sqlx::query_as("INSERT INTO games (start_datetime, end_datetime) VALUES($1, $2) RETURNING id").bind(start_datetime).bind(end_datetime).fetch_one(&mut *tx).await.unwrap();
     let game_id = row.0;
@@ -373,9 +358,9 @@ async fn post_games(Json(payload): Json<CreateGamePayload>, state: Arc<AppState>
     (StatusCode::OK, Json(PostResponse { success:true, error: None }))
 }
 
-async fn post_player(Json(payload): Json<PlayerPayload>, state: Arc<AppState>) -> impl IntoResponse {
+async fn post_player(Extension(pool): Extension<PgPool>, Json(payload): Json<PlayerPayload>) -> impl IntoResponse {
 
-    match sqlx::query("INSERT INTO players (name) VALUES($1)").bind(payload.name).execute(&state.pool).await {
+    match sqlx::query("INSERT INTO players (name) VALUES($1)").bind(payload.name).execute(&pool).await {
         Ok(_) => (StatusCode::OK, Json(PostResponse { success: true, error: None})),
         Err(error) if error.as_database_error().unwrap().code().unwrap() == "23505" => {
             (StatusCode::BAD_REQUEST, Json(
@@ -394,14 +379,14 @@ async fn post_player(Json(payload): Json<PlayerPayload>, state: Arc<AppState>) -
     }
 }
 
-async fn get_games(state: Arc<AppState>) -> Json<GamesResponse> {
+async fn get_games(Extension(pool): Extension<PgPool>) -> Json<GamesResponse> {
     let mut games_response = GamesResponse{
         games: vec![]
     };
 
-    let rows: Vec<(i32, i32, DateTime<Utc>, DateTime<Utc>, String, i32)> = sqlx::query_as("SELECT games.id, games_players.id, start_datetime, end_datetime, players.name, rank FROM games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&state.pool).await.unwrap();
+    let rows: Vec<(i32, i32, DateTime<Utc>, DateTime<Utc>, String, i32)> = sqlx::query_as("SELECT games.id, games_players.id, start_datetime, end_datetime, players.name, rank FROM games_players INNER JOIN games ON game_id = games.id INNER JOIN players ON player_id = players.id").fetch_all(&pool).await.unwrap();
 
-    let commander_rows: Vec<(i32, String)> = sqlx::query_as("SELECT games_players.id, commander FROM commanders INNER JOIN games_players ON games_players_id = games_players.id").fetch_all(&state.pool).await.unwrap();
+    let commander_rows: Vec<(i32, String)> = sqlx::query_as("SELECT games_players.id, commander FROM commanders INNER JOIN games_players ON games_players_id = games_players.id").fetch_all(&pool).await.unwrap();
 
     let unique_game_ids = rows.iter().fold(Vec::new(), |mut acc, row| {
         if !acc.contains(&row.0) {
@@ -454,8 +439,8 @@ async fn get_games(state: Arc<AppState>) -> Json<GamesResponse> {
     Json(games_response)
 }
 
-async fn get_players(state: Arc<AppState>) -> Json<PlayersResponse> {
-    let rows: Vec<(String,)> = sqlx::query_as("SELECT name FROM players").fetch_all(&state.pool).await.unwrap();
+async fn get_players(Extension(pool): Extension<PgPool>) -> Json<PlayersResponse> {
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT name FROM players").fetch_all(&pool).await.unwrap();
 
     // Flatten rows
     let names = rows.iter().fold(Vec::new(), |mut acc, row| {
