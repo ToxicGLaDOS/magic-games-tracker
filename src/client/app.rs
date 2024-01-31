@@ -141,6 +141,20 @@ pub fn app() -> Html {
         })
     };
 
+    let token = use_state(|| String::from(""));
+
+    let token_oninput = {
+        let token = token.clone();
+        Callback::from(move |event: InputEvent| {
+            let token = token.clone();
+            let input_event_target = event.target().unwrap();
+            let current_input_text = input_event_target.unchecked_into::<HtmlInputElement>().value();
+
+            token.set(current_input_text);
+        })
+    };
+
+
     let on_game_submit = {
         let messages = messages.clone();
         let commander_inputs = commander_inputs.clone();
@@ -149,6 +163,7 @@ pub fn app() -> Html {
         let start_datetime = start_datetime.clone();
         let end_datetime = end_datetime.clone();
         let mut players: Vec<Player> = Vec::new();
+        let token = token.clone();
         for index in 0..4 {
             if selected_players[index] != "" {
                 let mut commanders = Vec::new();
@@ -177,11 +192,13 @@ pub fn app() -> Html {
 
         Callback::from(move |_| {
             let messages = messages.clone();
+            let token = token.clone();
             let payload = payload.clone();
             log!(format!("{:?}", payload));
 
             wasm_bindgen_futures::spawn_local(async move {
                 let response: PostResponse = Request::post("/api/games")
+                    .header("Authorization", format!("Bearer {}", token.as_str()).as_str())
                     .json(&payload)
                     .unwrap()
                     .send()
@@ -218,8 +235,11 @@ pub fn app() -> Html {
             });
         });
     }
+
     html! {
         <main>
+            <label>{"Password"}</label>
+            <input type="password" oninput={token_oninput}/>
             <table>
                 <tr>
                     <td><label>{ "Start time" }</label></td>
@@ -273,7 +293,7 @@ pub fn app() -> Html {
             </table>
             <button onclick={on_game_submit.clone()}>{"Submit"}</button>
             <br/>
-            <NewPlayerForm players_update_callback={player_update_callback.clone()} message_callback={add_message}/>
+            <NewPlayerForm token={(*token).clone()} players_update_callback={player_update_callback.clone()} message_callback={add_message}/>
             <div class="toast-container">
                 {
                     messages.current().iter().map(|message| {

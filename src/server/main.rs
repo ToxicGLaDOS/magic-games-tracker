@@ -1,11 +1,18 @@
-use axum::Extension;
 use tokio;
 use axum::{
-    routing::get,
+    Extension,
+    middleware,
+    middleware::Next,
+    extract::{Request, FromRequestParts},
+    routing::{get, post},
     Router,
     Json,
-    http::StatusCode, response::IntoResponse
+    http::{StatusCode, request::Parts, header::AUTHORIZATION},
+    response::IntoResponse,
+    async_trait
 };
+use tower::ServiceBuilder;
+use headers::{Header, authorization::{Authorization, Bearer}};
 use reqwest;
 use reqwest::Method;
 use std::{env, thread, fs, fs::File, path::Path, io::Write, time::Duration, collections::HashMap};
@@ -138,6 +145,10 @@ fn generate_commanders() {
     println!("Loaded {} commanders", commanders.len());
 }
 
+fn get_post_token() -> String {
+    env::var("POST_TOKEN").unwrap_or(String::from("password"))
+}
+
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
     let _commander_thread = thread::spawn(|| {
@@ -194,17 +205,27 @@ async fn main() -> Result<(), sqlx::Error> {
             FOREIGN KEY (games_players_id) REFERENCES games_players(id)
             )").execute(&pool).await?;
 
+
+
+    let post_apis = Router::new()
+        .route("/games", post(post_games))
+        .route("/players", post(post_player))
+        .layer(middleware::from_fn(bearer_auth));
+
+    let get_apis = Router::new()
+        .route("/games", get(get_games))
+        .route("/players", get(get_players))
+        .route("/commanders", get(get_commanders));
+
     // build our application with a single route
     let app = Router::new()
-        .route("/api/games", get(get_games)
-               .post(post_games)
-               )
-        .route("/api/players", get(get_players)
-               .post(post_player)
-               )
-        .route("/api/commanders", get(get_commanders))
-        .layer(Extension(pool))
-        .layer(CorsLayer::permissive())
+        .nest("/api", post_apis)
+        .nest("/api", get_apis)
+        .layer(
+            ServiceBuilder::new()
+                .layer(Extension(pool))
+                .layer(CorsLayer::permissive())
+            )
         .fallback_service(
             ServeDir::new(opts.static_dir)
             );
@@ -214,6 +235,56 @@ async fn main() -> Result<(), sqlx::Error> {
     axum::serve(listener, app).await.unwrap();
 
     Ok(())
+}
+
+struct BearerAuthWithJsonResponse (Authorization<Bearer>);
+
+// We implement our own extractor because TypedHeader
+// returns plaintext error messages rather than JSON
+// and we want the errors to be machine readable.
+//
+// TODO: Make a custom extractor for JSON as well
+// because JSON that fails to deserialze will also
+// return plaintext error messages
+#[async_trait]
+impl<S> FromRequestParts<S> for BearerAuthWithJsonResponse
+where
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, Json<BearerAuthFailureResponse>);
+
+    // This is largely copied from https://docs.rs/axum-extra/latest/src/axum_extra/typed_header.rs.html#59-81
+    async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
+        let mut values = parts.headers.get_all(AUTHORIZATION).iter();
+        let is_missing = values.size_hint() == (0, Some(0));
+        Header::decode(&mut values)
+            .map(Self)
+            .map_err(|_| {
+                if is_missing {
+                    (StatusCode::UNAUTHORIZED, Json(BearerAuthFailureResponse{
+                        success:false, error: String::from("Missing bearer token in Authorization header.")
+                    }))
+                }
+                else {
+                    (StatusCode::UNAUTHORIZED, Json(BearerAuthFailureResponse{
+                        success:false, error: String::from("Invalid bearer token.")
+                    }))
+                }
+            })
+    }
+}
+
+async fn bearer_auth(bearer: BearerAuthWithJsonResponse, request: Request, next: Next) -> impl IntoResponse {
+    if bearer.0.token() == get_post_token() {
+        let response = next.run(request).await;
+        (StatusCode::OK, response)
+    }
+    else {
+        (StatusCode::UNAUTHORIZED, Json(BearerAuthFailureResponse {
+            success: false,
+            error: String::from("Incorrect bearer token provided.")
+        }).into_response())
+    }
 }
 
 async fn post_games(Extension(pool): Extension<PgPool>, Json(payload): Json<CreateGamePayload>) -> impl IntoResponse {
@@ -359,7 +430,6 @@ async fn post_games(Extension(pool): Extension<PgPool>, Json(payload): Json<Crea
 }
 
 async fn post_player(Extension(pool): Extension<PgPool>, Json(payload): Json<PlayerPayload>) -> impl IntoResponse {
-
     match sqlx::query("INSERT INTO players (name) VALUES($1)").bind(payload.name).execute(&pool).await {
         Ok(_) => (StatusCode::OK, Json(PostResponse { success: true, error: None})),
         Err(error) if error.as_database_error().unwrap().code().unwrap() == "23505" => {

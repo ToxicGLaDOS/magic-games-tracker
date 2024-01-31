@@ -52,3 +52,9 @@ pub struct CreateGamePayload {
     pub end_datetime: String,
     pub players: Vec<Player>,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct BearerAuthFailureResponse {
+    pub success: bool,
+    pub error: String
+}
